@@ -1,0 +1,72 @@
+<!-- Plik: AndroidManifest.xml -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ✅ UPRAWNIENIA DO POWIADOMIEŃ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application
+        android:name=".ChronosApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Chronos">
+
+        <!-- Główna aktywność -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.Chronos">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- ✅ RECEIVERY DO POWIADOMIEŃ -->
+
+        <!-- Task Reminders -->
+        <receiver
+            android:name=".notifications.TaskReminderReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- Habit Reminders -->
+        <receiver
+            android:name=".notifications.HabitReminderReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- Goal Reminders -->
+        <receiver
+            android:name=".notifications.GoalReminderReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+
+        <receiver
+            android:name=".utils.CustomEventNotificationReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- Boot Receiver (przywracanie po restarcie) - OPCJONALNIE -->
+        <!--
+        <receiver
+            android:name=".notifications.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+        -->
+
+    </application>
+</manifest>

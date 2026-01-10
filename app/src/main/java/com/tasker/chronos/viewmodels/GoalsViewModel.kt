@@ -9,8 +9,11 @@ import com.tasker.chronos.data.models.MiniGoal
 import com.tasker.chronos.data.repository.GoalsRepository
 import com.tasker.chronos.notifications.GoalReminderScheduler
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -21,6 +24,8 @@ import java.time.LocalDateTime
 class GoalsViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = GoalsRepository(application)
 
+    private val _goalCompletedEvent = MutableSharedFlow<String>(replay = 0)
+    val goalCompletedEvent: SharedFlow<String> = _goalCompletedEvent.asSharedFlow()
     // Wszystkie cele
     val allGoals: StateFlow<List<Goal>> = repository.getAllGoals()
         .stateIn(
@@ -29,8 +34,12 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
             initialValue = emptyList()
         )
 
+
+
+
     // Aktywne cele (nie ukończone)
-    val activeGoals: StateFlow<List<Goal>> = repository.getActiveGoals()
+    // Aktywne cele (nie ukończone)
+    val activeGoals: StateFlow<List<Goal>> =repository.getActiveGoals()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -53,6 +62,7 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
             GoalReminderScheduler.reschedule(getApplication(), goal)
             android.util.Log.d("GoalsViewModel", "✅ Zaktualizowano cel: ${goal.title}")
         }
+
     }
 
     fun deleteGoal(goal: Goal) {
@@ -111,8 +121,6 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
             android.util.Log.d("GoalsViewModel", "🔍 Mini-cel ID: $miniGoalId")
 
             val allGoalsList = repository.getAllGoals().first()
-            android.util.Log.d("GoalsViewModel", "🔍 Liczba celów w repo: ${allGoalsList.size}")
-
             val goal = allGoalsList.find { it.id == goalId }
 
             if (goal == null) {
@@ -121,36 +129,21 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             android.util.Log.d("GoalsViewModel", "✅ Znaleziono cel: ${goal.title}")
-            android.util.Log.d("GoalsViewModel", "✅ Liczba mini-celów: ${goal.miniGoals.size}")
 
-            // ❌ USUŃ stary kod sprawdzający `miniGoal.date == null`
-            // ✅ DODAJ nowy kod:
+            // ✅ Zapisz stan PRZED zmianą
+            val wasPreviouslyIncomplete = !goal.isCompleted()
 
+            // ✅ NOWA PROSTA LOGIKA: Przełącz isCompleted dla mini-celu
             val updatedMiniGoals = goal.miniGoals.map { miniGoal ->
                 if (miniGoal.id == miniGoalId) {
-                    if (miniGoal.date != null) {
-                        // Mini-cel Z DATĄ - przełącz isCompleted
-                        val newCompletedState = !miniGoal.isCompleted
-                        miniGoal.copy(
-                            isCompleted = newCompletedState,
-                            completedAt = if (newCompletedState)
-                                java.time.LocalDateTime.now().toString()
-                            else
-                                null
-                        )
-                    } else {
-                        // Mini-cel BEZ DATY - przełącz dailyCompletions (dzisiejsza data)
-                        val currentCompletions = miniGoal.dailyCompletions ?: emptyList()
-                        val today = java.time.LocalDate.now().toString()
-
-                        val newCompletions = if (currentCompletions.contains(today)) {
-                            currentCompletions - today  // Usuń
-                        } else {
-                            currentCompletions + today  // Dodaj
-                        }
-
-                        miniGoal.copy(dailyCompletions = newCompletions)
-                    }
+                    val newCompletedState = !miniGoal.isCompleted
+                    miniGoal.copy(
+                        isCompleted = newCompletedState,
+                        completedAt = if (newCompletedState)
+                            java.time.LocalDateTime.now().toString()
+                        else
+                            null
+                    )
                 } else {
                     miniGoal
                 }
@@ -159,17 +152,29 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
             val updatedGoal = goal.copy(miniGoals = updatedMiniGoals)
             repository.updateGoal(updatedGoal)
 
-            // Log
-            val miniGoal = updatedMiniGoals.find { it.id == miniGoalId }
-            val isCompleted = if (miniGoal?.date != null)
-                miniGoal.isCompleted
-            else
-                miniGoal?.isCompletedToday() ?: false
+            // ✅ Log PO zapisie
+            android.util.Log.d("GoalsViewModel", "📝 Zaktualizowany cel:")
+            updatedGoal.miniGoals.forEach { mini ->
+                android.util.Log.d("GoalsViewModel", "  - '${mini.title}' | date: ${mini.date ?: "BRAK"} | isCompleted: ${mini.isCompleted}")
+            }
 
+            // ✅ Sprawdź czy cel został TERAZ ukończony w 100%
+            val isNowComplete = updatedGoal.isCompleted()
+
+            android.util.Log.d("GoalsViewModel", "📊 wasPreviouslyIncomplete: $wasPreviouslyIncomplete, isNowComplete: $isNowComplete")
+
+            // ✅ WYWOŁAJ EVENT jeśli cel został właśnie ukończony
+            if (wasPreviouslyIncomplete && isNowComplete) {
+                android.util.Log.d("GoalsViewModel", "🎉 CEL UKOŃCZONY! Wywołuję goalCompletedEvent")
+                _goalCompletedEvent.emit(updatedGoal.title)
+            }
+
+            // Log statusu mini-celu
+            val miniGoal = updatedMiniGoals.find { it.id == miniGoalId }
             android.util.Log.d(
                 "GoalsViewModel",
-                if (isCompleted)
-                    "✅ Ukończono mini-cel: ${miniGoal?.title} w: ${goal.title}"
+                if (miniGoal?.isCompleted == true)
+                    "✅ Ukończono mini-cel: ${miniGoal.title} w: ${goal.title}"
                 else
                     "↩️ Przywrócono mini-cel: ${miniGoal?.title} w: ${goal.title}"
             )
@@ -247,6 +252,9 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * ✅ NOWE: Mini-cele z datami (dla inbox w kalendarzu)
      */
+    /**
+     * ✅ Mini-cele z datami (dla inbox w kalendarzu)
+     */
     val miniGoalsWithDates: StateFlow<List<Pair<Goal, MiniGoal>>> = allGoals
         .map { goals ->
             android.util.Log.d("GoalsViewModel", "🔍 Wszystkie cele: ${goals.size}")
@@ -261,7 +269,7 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
                 goal.miniGoals
                     .filter { miniGoal ->
                         val hasDate = miniGoal.date != null
-                        val notCompleted = !miniGoal.isCompleted
+                        val notCompleted = !miniGoal.isCompleted  // ✅ POPRAWKA
                         android.util.Log.d("GoalsViewModel", "    Filtr: ${miniGoal.title} - hasDate: $hasDate, notCompleted: $notCompleted")
                         hasDate && notCompleted
                     }
@@ -269,9 +277,9 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
             }
                 .sortedBy { (_, miniGoal) ->
                     try {
-                        LocalDate.parse(miniGoal.date)
+                        java.time.LocalDate.parse(miniGoal.date)
                     } catch (e: Exception) {
-                        LocalDate.MAX
+                        java.time.LocalDate.MAX
                     }
                 }
                 .also {
@@ -308,6 +316,9 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * ✅ Mini-cele dla konkretnej daty
      */
+    /**
+     * ✅ Mini-cele dla konkretnej daty
+     */
     fun getMiniGoalsForDate(date: String): StateFlow<List<Pair<Goal, MiniGoal>>> = allGoals
         .map { goals ->
             android.util.Log.d("GoalsViewModel", "========================================")
@@ -328,7 +339,7 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
                     .filter { miniGoal ->
                         // ✅ NOWA LOGIKA:
                         // 1. Mini-cele Z DATĄ: pokazuj TYLKO jeśli data == dzisiaj I nie ukończone
-                        // 2. Mini-cele BEZ DATY: pokazuj ZAWSZE (codzienne) I nie ukończone dzisiaj
+                        // 2. Mini-cele BEZ DATY: pokazuj ZAWSZE (można dodawać codziennie) I nie ukończone
 
                         if (miniGoal.date != null) {
                             // Mini-cel Z DATĄ - sprawdź czy pasuje data
@@ -340,13 +351,13 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
 
                             matchesDate && notCompleted
                         } else {
-                            // ✅ Mini-cel BEZ DATY - pokazuj ZAWSZE (jeśli nie ukończony dzisiaj)
-                            val notCompletedToday = !miniGoal.isCompletedToday()
+                            // ✅ Mini-cel BEZ DATY - pokazuj ZAWSZE (jeśli nie ukończony)
+                            val notCompleted = !miniGoal.isCompleted
 
                             android.util.Log.d("GoalsViewModel",
-                                "    [Bez daty] '${miniGoal.title}' - notCompletedToday($notCompletedToday)")
+                                "    [Bez daty] '${miniGoal.title}' - notCompleted($notCompleted)")
 
-                            notCompletedToday
+                            notCompleted
                         }
                     }
                     .map { miniGoal -> goal to miniGoal }
@@ -354,7 +365,7 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
 
             android.util.Log.d("GoalsViewModel", "✅ Wynik: ${filtered.size} mini-celów dla $date")
             filtered.forEach { (goal, mini) ->
-                val type = if (mini.date != null) "[Z datą]" else "[Codzienny]"
+                val type = if (mini.date != null) "[Z datą]" else "[Bez daty]"
                 android.util.Log.d("GoalsViewModel", "  ✓ $type ${mini.title} (z: ${goal.title})")
             }
             android.util.Log.d("GoalsViewModel", "========================================")
@@ -392,68 +403,6 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * ✅ NOWE: Przełącz status mini-celu CODZIENNEGO (bez daty)
      */
-    fun toggleDailyMiniGoal(goalId: String, miniGoalId: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val allGoalsList = repository.getAllGoals().first()
-            val goal = allGoalsList.find { it.id == goalId }
 
-            if (goal == null) {
-                android.util.Log.e("GoalsViewModel", "❌ Nie znaleziono celu: $goalId")
-                return@launch
-            }
 
-            val today = LocalDate.now().toString()
-
-            val updatedMiniGoals = goal.miniGoals.map { miniGoal ->
-                if (miniGoal.id == miniGoalId && miniGoal.date == null) {
-                    // Mini-cel BEZ daty - dodaj/usuń dzisiejszą datę z listy
-                    val newCompletions = if (miniGoal.dailyCompletions.contains(today)) {
-                        miniGoal.dailyCompletions - today  // Usuń
-                    } else {
-                        miniGoal.dailyCompletions + today  // Dodaj
-                    }
-
-                    miniGoal.copy(dailyCompletions = newCompletions)
-                } else {
-                    miniGoal
-                }
-            }
-
-            val updatedGoal = goal.copy(miniGoals = updatedMiniGoals)
-            repository.updateGoal(updatedGoal)
-
-            android.util.Log.d("GoalsViewModel", "✅ Przełączono codzienny mini-cel")
-        }
-    }
-    init {
-        // ✅ Migracja: Napraw stare mini-cele bez dailyCompletions
-        viewModelScope.launch(Dispatchers.IO) {
-            val goals = repository.getAllGoals().first()
-            var needsUpdate = false
-
-            val updatedGoals = goals.map { goal ->
-                val updatedMiniGoals = goal.miniGoals.map { miniGoal ->
-                    if (miniGoal.dailyCompletions == null) {
-                        needsUpdate = true
-                        miniGoal.copy(dailyCompletions = emptyList())
-                    } else {
-                        miniGoal
-                    }
-                }
-
-                if (updatedMiniGoals != goal.miniGoals) {
-                    goal.copy(miniGoals = updatedMiniGoals)
-                } else {
-                    goal
-                }
-            }
-
-            if (needsUpdate) {
-                updatedGoals.forEach { goal ->
-                    repository.updateGoal(goal)
-                }
-                android.util.Log.d("GoalsViewModel", "✅ Zmigrowano ${updatedGoals.size} celów")
-            }
-        }
-    }
 }

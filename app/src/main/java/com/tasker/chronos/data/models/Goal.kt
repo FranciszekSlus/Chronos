@@ -9,34 +9,19 @@ import java.util.UUID
 data class MiniGoal(
     val id: String = UUID.randomUUID().toString(),
     val title: String,
-    val date: String? = null,       // Opcjonalna data (jednorazowe)
-    val isCompleted: Boolean = false,  // Dla mini-celów Z DATĄ
-    val completedAt: String? = null,
-    val dailyCompletions: List<String> = emptyList()  // ✅ NOWE: Daty ukończenia (dla BEZ daty)
+    val date: String? = null,       // null = "bez daty", można dodawać codziennie do kalendarza
+    val isCompleted: Boolean = false,  // ✅ DLA WSZYSTKICH mini-celów
+    val completedAt: String? = null
+    // ❌ USUŃ: val dailyCompletions: List<String> = emptyList()
 ) {
     /**
-     * ✅ Sprawdź czy mini-cel jest ukończony dzisiaj (dla BEZ daty)
-     */
-    /**
-     * ✅ Sprawdź czy mini-cel jest ukończony dzisiaj (dla BEZ daty)
-     */
-    fun isCompletedToday(): Boolean {
-        if (date != null) return isCompleted  // Mini-cele z datą - użyj isCompleted
-
-        val today = java.time.LocalDate.now().toString()
-        return dailyCompletions?.contains(today) ?: false  // ✅ Zabezpieczenie przed null
-    }
-
-    /**
-     * ✅ Czy mini-cel jest "ostatecznie ukończony" (dla postępu celu)
+     * ✅ Czy mini-cel jest ukończony (dla WSZYSTKICH typów)
      */
     fun isFinallyCompleted(): Boolean {
-        return if (date != null) {
-            isCompleted  // Mini-cele z datą - sprawdź isCompleted
-        } else {
-            false  // Mini-cele bez daty nigdy nie są "ukończone" (są codzienne)
-        }
+        return isCompleted  // ✅ Prosto - sprawdź flagę
     }
+
+    // ❌ USUŃ metodę isCompletedToday() - nie jest już potrzebna
 }
 
 /**
@@ -47,10 +32,11 @@ data class Goal(
     val title: String,
     val description: String = "",
     val endDate: String? = null,
-    val color: Long = 0xFF2196F3L,  // ✅ Typ Long, nie String
+    val color: Long = 0xFF2196F3L,
     val miniGoals: List<MiniGoal> = emptyList(),
     val notes: String = "",
-    val createdAt: String = java.time.LocalDateTime.now().toString()
+    val createdAt: String = java.time.LocalDateTime.now().toString(),
+    val manuallyCompleted: Boolean = false  // ✅ NOWE: Oznacz ręcznie jako ukończony
 ) {
     /**
      * Oblicza procent wykonania na podstawie ukończonych mini-celów (0.0 - 1.0)
@@ -58,14 +44,8 @@ data class Goal(
     fun getProgress(): Float {
         if (miniGoals.isEmpty()) return 0f
 
-        // ✅ Licznik uwzględnia WSZYSTKIE typy mini-celów
-        val completed = miniGoals.count { miniGoal ->
-            if (miniGoal.date != null) {
-                miniGoal.isFinallyCompleted()  // Mini-cele z datą
-            } else {
-                miniGoal.isCompletedToday()    // Mini-cele bez daty (dzisiejszy status)
-            }
-        }
+        // ✅ Policz ukończone mini-cele (niezależnie od daty)
+        val completed = miniGoals.count { it.isCompleted }
 
         return (completed.toFloat() / miniGoals.size.toFloat())
     }
@@ -73,26 +53,32 @@ data class Goal(
     fun getProgressPercentage(): Int {
         if (miniGoals.isEmpty()) return 0
 
-        // ✅ Licznik uwzględnia WSZYSTKIE typy mini-celów
-        val completed = miniGoals.count { miniGoal ->
-            if (miniGoal.date != null) {
-                miniGoal.isFinallyCompleted()
-            } else {
-                miniGoal.isCompletedToday()
-            }
-        }
+        // ✅ Policz ukończone mini-cele (niezależnie od daty)
+        val completed = miniGoals.count { it.isCompleted }
 
         return (completed * 100 / miniGoals.size)
     }
 
     fun isCompleted(): Boolean {
-        if (miniGoals.isEmpty()) return false
+        android.util.Log.d("Goal", "========================================")
+        android.util.Log.d("Goal", "🔍 Sprawdzanie isCompleted() dla: $title")
+        android.util.Log.d("Goal", "📊 Wszystkie mini-cele: ${miniGoals.size}")
 
-        // ✅ Cel jest ukończony tylko jeśli WSZYSTKIE mini-cele z datami są ukończone
-        // Mini-cele bez daty (codzienne) NIE liczą się do "ostatecznego" ukończenia
-        val miniGoalsWithDate = miniGoals.filter { it.date != null }
+        if (miniGoals.isEmpty()) {
+            android.util.Log.d("Goal", "❌ Brak mini-celów - cel nieukończony")
+            return false
+        }
 
-        return miniGoalsWithDate.isNotEmpty() &&
-                miniGoalsWithDate.all { it.isFinallyCompleted() }
+        // ✅ NOWA PROSTA LOGIKA: Sprawdź czy WSZYSTKIE mini-cele mają isCompleted = true
+        miniGoals.forEach { mini ->
+            android.util.Log.d("Goal", "  - '${mini.title}' | date: ${mini.date ?: "BRAK (można dodawać codziennie)"} | isCompleted: ${mini.isCompleted}")
+        }
+
+        val allCompleted = miniGoals.all { it.isCompleted }
+
+        android.util.Log.d("Goal", "🎯 Wszystkie mini-cele ukończone: $allCompleted")
+        android.util.Log.d("Goal", "========================================")
+
+        return allCompleted
     }
 }

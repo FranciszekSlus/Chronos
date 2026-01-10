@@ -95,6 +95,14 @@ fun StartScreen(
             }
         }
     }
+    // ✅ DODAJ NOWY LaunchedEffect - tuż PRZED istniejącym LaunchedEffect(initialGoalId)
+    LaunchedEffect(Unit) {
+        goalsViewModel.goalCompletedEvent.collect { goalTitle ->
+            completionMessage = "🎉 Cel '$goalTitle' został ukończony w 100%!\n📦 Przeniesiono do archiwum"
+            completionType = CompletionType.GOAL
+            showCompletionToast = true
+        }
+    }
 
     val tabs = listOf("Zadania", "Nawyki", "Cele")
 
@@ -286,8 +294,9 @@ fun StartScreen(
                     onGoalClick = { goal ->
                         selectedGoal = goal  // ✅ POPRAWKA: Ustaw selectedGoal
                     },
-                    onGoalCompleted = { goalTitle ->
-                        completionMessage = "Cel '$goalTitle' został ukończony w 100%"
+                    onGoalCompleted = { message ->
+                        // ✅ UŻYJ PRZEKAZANEJ WIADOMOŚCI:
+                        completionMessage = message
                         completionType = CompletionType.GOAL
                         showCompletionToast = true
                     }
@@ -413,9 +422,6 @@ fun StartScreen(
                 onToggleMiniGoal = { miniGoalId ->
                     goalsViewModel.toggleMiniGoalCompleted(currentGoal.id, miniGoalId)
                 },
-                onToggleDailyMiniGoal = { miniGoalId ->  // ✅ DODAJ TO
-                    goalsViewModel.toggleDailyMiniGoal(currentGoal.id, miniGoalId)
-                },
                 onAddMiniGoal = { miniGoal ->
                     goalsViewModel.addMiniGoal(currentGoal.id, miniGoal)
                 },
@@ -440,7 +446,7 @@ fun StartScreen(
 
     if (showCompletionToast) {
         CompletionToast(
-            message = completionMessage,
+            message = completionMessage,  // ✅ To działa poprawnie
             type = completionType,
             onDismiss = { showCompletionToast = false }
         )
@@ -569,18 +575,11 @@ fun GoalsTab(
                         onToggleGoalCompleted = { goalId ->
                             viewModel.toggleGoalCompleted(goalId)
                         },
+                        // ✅ NOWY KOD - prosty callback bez logiki
                         onToggleMiniGoal = { miniGoalId ->
                             viewModel.toggleMiniGoalCompleted(goal.id, miniGoalId)
+                        },
 
-                            // Sprawdź czy cel się ukończył
-                            val updatedGoal = goals.find { it.id == goal.id }
-                            if (updatedGoal?.isCompleted() == true) {
-                                onGoalCompleted(goal.title)
-                            }
-                        },
-                        onToggleDailyMiniGoal = { miniGoalId ->
-                            viewModel.toggleDailyMiniGoal(goal.id, miniGoalId)
-                        },
                         isExpanded = expandedGoalId == goal.id,
                         onExpandToggle = {
                             expandedGoalId = if (expandedGoalId == goal.id) null else goal.id

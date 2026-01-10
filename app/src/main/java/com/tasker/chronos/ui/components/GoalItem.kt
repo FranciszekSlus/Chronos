@@ -34,7 +34,6 @@ fun GoalItem(
     onGoalLongClick: () -> Unit = {},
     onToggleGoalCompleted: ((String) -> Unit)? = null,
     onToggleMiniGoal: ((String) -> Unit)? = null,
-    onToggleDailyMiniGoal: ((String) -> Unit)? = null,
     isExpanded: Boolean = false,
     onExpandToggle: () -> Unit = {}
 ) {
@@ -81,29 +80,7 @@ fun GoalItem(
                         ),
                         modifier = Modifier.padding(end = 8.dp)
                     )
-                    Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            LinearProgressIndicator(
-                                progress = { progress },  // ✅ To musi być tutaj
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(8.dp)
-                                    .clip(RoundedCornerShape(4.dp)),
-                                color = GoalOrange,
-                                trackColor = GoalOrange.copy(alpha = 0.2f)
-                            )
-
-                            Text(
-                                text = "$progressPercentage%",  // ✅ To musi być tutaj
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = GoalOrange
-                            )
-                        }
-                    }
+                }
 
                 Column(
                     modifier = Modifier.weight(1f),
@@ -135,77 +112,37 @@ fun GoalItem(
                         }
                     }
 
+                    // Pasek postępu (tylko dla celów z mini-celami)
                     if (hasMiniGoals) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = GoalOrange.copy(alpha = 0.15f)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val completed = goal.miniGoals.count { it.isFinallyCompleted() }
-                            Text(
-                                text = "📋 $completed/${goal.miniGoals.size}",  // ✅ Wszystkie mini-cele
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
                                 color = GoalOrange,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                trackColor = GoalOrange.copy(alpha = 0.2f)
+                            )
+
+                            Text(
+                                text = "$progressPercentage%",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = GoalOrange
                             )
                         }
                     }
 
-                    // Meta informacje
+                    // Meta informacje (licznik + data)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        // Mini-cele (jeśli istnieją)
-                        if (hasMiniGoals) {
-                            // ✅ POPRAWKA: Licznik uwzględnia WSZYSTKIE typy mini-celów
-                            val completedCount = goal.miniGoals.count { miniGoal ->
-                                if (miniGoal.date != null) {
-                                    miniGoal.isFinallyCompleted()
-                                } else {
-                                    miniGoal.isCompletedToday()
-                                }
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = GoalOrange.copy(alpha = 0.15f)
-                            ) {
-                                Text(
-                                    text = "📋 $completedCount/${goal.miniGoals.size}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = GoalOrange,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                )
-                            }
-                        }
-
-                        // Data końcowa (pozostaje bez zmian)
-                        if (goal.endDate != null) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (daysLeftText == null)
-                                    PriorityHigh.copy(alpha = 0.15f)
-                                else
-                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                            ) {
-                                val dateText = if (daysLeftText != null) {
-                                    "📅 Za $daysLeftText"
-                                } else {
-                                    "⚠️ Termin minął"
-                                }
-
-                                Text(
-                                    text = dateText,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = if (daysLeftText == null) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (daysLeftText == null) PriorityHigh else MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                )
-                            }
-                        }
-                    }
 
                         // Data końcowa
                         if (goal.endDate != null) {
@@ -245,7 +182,7 @@ fun GoalItem(
                 }
             }
 
-            // === EXPANDED CONTENT (mini-cele + przyciski) ===
+            // === EXPANDED CONTENT ===
             AnimatedVisibility(
                 visible = isExpanded,
                 enter = expandVertically(animationSpec = tween(300)) + fadeIn(),
@@ -276,9 +213,7 @@ fun GoalItem(
                         HorizontalDivider(color = GoalOrange.copy(alpha = 0.2f))
                     }
 
-                    // Mini-cele z datami
-                    val miniGoalsWithDates = goal.miniGoals.filter { it.date != null }
-
+                    // Mini-cele
                     if (goal.miniGoals.isNotEmpty()) {
                         Text(
                             "📋 Mini-cele",
@@ -287,35 +222,24 @@ fun GoalItem(
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                         )
+
                         goal.miniGoals.forEach { miniGoal ->
                             MiniGoalCheckboxItem(
                                 miniGoal = miniGoal,
-                                isCompleted = if (miniGoal.date != null)
-                                    miniGoal.isFinallyCompleted()
-                                else
-                                    miniGoal.isCompletedToday(),
-                                onToggle = {
-                                    if (miniGoal.date != null) {
-                                        // Mini-cel z datą
-                                        onToggleMiniGoal?.invoke(miniGoal.id)
-                                    } else {
-                                        // Mini-cel codzienny (bez daty)
-                                        onToggleDailyMiniGoal?.invoke(miniGoal.id)
-                                    }
-                                },
+                                isCompleted = miniGoal.isCompleted,  // ✅ Prosto - sprawdź flagę
+                                onToggle = { onToggleMiniGoal?.invoke(miniGoal.id) },  // ✅ Jeden callback
                                 showDate = miniGoal.date != null
                             )
                         }
                     }
 
-                    // Przycisk Edytuj
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    // Przyciski
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // Notatki (jeśli istnieją)
                         if (goal.notes.isNotBlank()) {
                             OutlinedButton(
                                 onClick = onGoalClick,
@@ -325,7 +249,11 @@ fun GoalItem(
                                     contentColor = MaterialTheme.colorScheme.primary
                                 )
                             ) {
-                                Icon(Icons.Default.StickyNote2, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(
+                                    Icons.Default.StickyNote2,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Notatki", fontWeight = FontWeight.Medium)
                             }
@@ -333,13 +261,17 @@ fun GoalItem(
 
                         Button(
                             onClick = onGoalClick,
-                            modifier = Modifier.weight(if (goal.notes.isNotBlank()) 1f else 1f),
+                            modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = GoalOrange
                             )
                         ) {
-                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Edytuj", fontWeight = FontWeight.Bold)
                         }
@@ -348,7 +280,7 @@ fun GoalItem(
             }
         }
     }
-
+}
 
 @Composable
 fun MiniGoalCheckboxItem(
@@ -356,7 +288,6 @@ fun MiniGoalCheckboxItem(
     isCompleted: Boolean,
     onToggle: () -> Unit,
     showDate: Boolean = false
-    // ❌ USUŃ: isDailyGoal: Boolean = false
 ) {
     Row(
         modifier = Modifier
@@ -405,7 +336,6 @@ fun MiniGoalCheckboxItem(
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
-
         }
     }
 }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,6 +24,7 @@ import com.tasker.chronos.data.models.Goal
 import com.tasker.chronos.data.models.MiniGoal
 import com.tasker.chronos.ui.components.*
 import com.tasker.chronos.ui.theme.*
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.util.UUID
 
@@ -41,12 +43,16 @@ fun AddGoalDialog(
     var newMiniGoalTitle by remember { mutableStateOf("") }
     var newMiniGoalDate by remember { mutableStateOf<String?>(null) }
     var showMiniGoalDatePicker by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
-        dragHandle = { BottomSheetDefaults.DragHandle() }
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+
     ) {
         Column(
             modifier = Modifier
@@ -214,13 +220,34 @@ fun AddGoalDialog(
                             FilledIconButton(
                                 onClick = {
                                     if (newMiniGoalTitle.isNotBlank()) {
-                                        // Walidacja daty
+                                        // ✅ WALIDACJA: Data mini-celu nie może być późniejsza niż deadline celu
                                         if (newMiniGoalDate != null && endDate != null) {
                                             try {
                                                 val miniDate = LocalDate.parse(newMiniGoalDate)
                                                 val goalDeadline = LocalDate.parse(endDate)
-                                                if (miniDate.isAfter(goalDeadline)) return@FilledIconButton
-                                            } catch (e: Exception) { }
+
+                                                // ❌ STARY KOD: if (miniDate.isAfter(goalDeadline)) return@FilledIconButton
+
+                                                // ✅ NOWY KOD: Pokaż komunikat
+                                                if (miniDate.isAfter(goalDeadline)) {
+                                                    scope.launch {
+                                                        snackbarHostState.showSnackbar(
+                                                            message = "⚠️ Data mini-celu nie może być późniejsza niż ${
+                                                                formatDate(
+                                                                    endDate!!
+                                                                )
+                                                            }",
+                                                            duration = SnackbarDuration.Short
+                                                        )
+                                                    }
+                                                    return@FilledIconButton
+                                                }
+                                            } catch (e: Exception) {
+                                                android.util.Log.e(
+                                                    "AddGoalSheet",
+                                                    "Błąd parsowania dat: ${e.message}"
+                                                )
+                                            }
                                         }
 
                                         miniGoals = miniGoals + MiniGoal(
@@ -245,11 +272,50 @@ fun AddGoalDialog(
                                 color = GoalOrange,
                                 modifier = Modifier.padding(start = 4.dp)
                             )
+
+                            // ✅ DODAJ walidację wizualną
+                            val isDateInvalid = remember(newMiniGoalDate, endDate) {
+                                if (endDate != null) {
+                                    try {
+                                        val miniDate = LocalDate.parse(newMiniGoalDate)
+                                        val goalDeadline = LocalDate.parse(endDate)
+                                        miniDate.isAfter(goalDeadline)
+                                    } catch (e: Exception) {
+                                        false
+                                    }
+                                } else {
+                                    false
+                                }
+                            }
+
+                            if (isDateInvalid) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(top = 4.dp, start = 4.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = PriorityHigh,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Data mini-celu nie może być późniejsza niż ${
+                                            formatDate(
+                                                endDate!!
+                                            )
+                                        }",
+                                        fontSize = 11.sp,
+                                        color = PriorityHigh,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
                         }
                     }
-                }
 
-                Spacer(modifier = Modifier.height(80.dp))
+                }
             }
 
             // === BOTTOM BUTTONS ===

@@ -36,7 +36,6 @@ fun EditGoalSheet(
     onSave: (Goal) -> Unit,
     onDelete: (Goal) -> Unit,
     onToggleMiniGoal: (String) -> Unit,
-    onToggleDailyMiniGoal: (String) -> Unit = {},  // ✅ DODAJ TO
     onAddMiniGoal: (MiniGoal) -> Unit,
     onDeleteMiniGoal: (String) -> Unit,
     onUpdateMiniGoal: (MiniGoal) -> Unit = {},
@@ -229,11 +228,12 @@ fun EditGoalSheet(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val withDate = goal.miniGoals.filter { it.date != null }
-                            val completedWithDate = withDate.count { it.isFinallyCompleted() }
+
+                            // ✅ NOWY KOD - wszystkie mini-cele razem
+                            val completedCount = goal.miniGoals.count { it.isCompleted }
 
                             Text(
-                                "Mini-cele (${completedWithDate}/${withDate.size})",
+                                "Mini-cele ($completedCount/${goal.miniGoals.size})",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp
                             )
@@ -259,57 +259,22 @@ fun EditGoalSheet(
                             )
                         } else {
                             // ✅ SEKCJA 1: Mini-cele Z DATĄ (jednorazowe)
-                            val withDate = goal.miniGoals.filter { it.date != null }
-                            if (withDate.isNotEmpty()) {
+                            if (goal.miniGoals.isEmpty()) {
                                 Text(
-                                    "📅 Z datą (jednorazowe)",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.primary
+                                    "Brak mini-celów. Dodaj pierwszy!",
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(vertical = 8.dp)
                                 )
-
-                                withDate.forEach { miniGoal ->
+                            } else {
+                                // ✅ WSZYSTKIE mini-cele razem (bez podziału)
+                                goal.miniGoals.forEach { miniGoal ->
                                     AnimatedMiniGoalItem(
                                         miniGoal = miniGoal,
                                         goal = goal,
-                                        onToggle = {
-                                            val completedCount = withDate.count { it.isFinallyCompleted() }
-                                            val willBeCompleted = !miniGoal.isCompleted &&
-                                                    completedCount == withDate.size - 1
-
-                                            onToggleMiniGoal(miniGoal.id)
-
-                                            if (willBeCompleted) {
-                                                onGoalCompleted(goal.title)
-                                            }
-                                        },
+                                        onToggle = { onToggleMiniGoal(miniGoal.id) },  // ✅ Jeden callback dla wszystkich
                                         onDelete = { onDeleteMiniGoal(miniGoal.id) },
-                                        onUpdateMiniGoal = onUpdateMiniGoal,
-                                        onToggleDaily = null  // Nie używane dla mini-celów z datą
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(8.dp))
-                            }
-
-                            // ✅ SEKCJA 2: Mini-cele BEZ DATY (codzienne)
-                            val withoutDate = goal.miniGoals.filter { it.date == null }
-                            if (withoutDate.isNotEmpty()) {
-                                Text(
-                                    "🔁 Codzienne (wielokrotne)",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Color(0xFF4CAF50)
-                                )
-
-                                withoutDate.forEach { miniGoal ->
-                                    AnimatedMiniGoalItem(
-                                        miniGoal = miniGoal,
-                                        goal = goal,
-                                        onToggle = null,  // Nie używane dla codziennych
-                                        onDelete = { onDeleteMiniGoal(miniGoal.id) },
-                                        onUpdateMiniGoal = onUpdateMiniGoal,
-                                        onToggleDaily = { onToggleDailyMiniGoal(miniGoal.id) }  // ✅ NOWE
+                                        onUpdateMiniGoal = onUpdateMiniGoal
                                     )
                                 }
                             }
@@ -527,10 +492,9 @@ fun AnimatedProgressBar(progress: Float) {
 fun AnimatedMiniGoalItem(
     miniGoal: MiniGoal,
     goal: Goal,
-    onToggle: (() -> Unit)?,  // ✅ Nullable dla codziennych
+    onToggle: () -> Unit,  // ✅ Jeden callback dla wszystkich
     onDelete: () -> Unit,
-    onUpdateMiniGoal: (MiniGoal) -> Unit,
-    onToggleDaily: (() -> Unit)? = null  // ✅ NOWE: Dla mini-celów bez daty
+    onUpdateMiniGoal: (MiniGoal) -> Unit
 ) {
     var isPressed by remember { mutableStateOf(false) }
     var showMiniGoalDatePicker by remember { mutableStateOf(false) }
@@ -540,12 +504,8 @@ fun AnimatedMiniGoalItem(
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
     )
 
-    // ✅ Rozróżnij status (jednorazowy vs codzienny)
-    val isChecked = if (miniGoal.date != null) {
-        miniGoal.isCompleted
-    } else {
-        miniGoal.isCompletedToday()
-    }
+    // ✅ PROSTA LOGIKA - sprawdź isCompleted
+    val isChecked = miniGoal.isCompleted
 
     Surface(
         modifier = Modifier
@@ -569,11 +529,7 @@ fun AnimatedMiniGoalItem(
                 checked = isChecked,
                 onCheckedChange = {
                     isPressed = true
-                    if (miniGoal.date != null) {
-                        onToggle?.invoke()  // Jednorazowy
-                    } else {
-                        onToggleDaily?.invoke()  // Codzienny
-                    }
+                    onToggle()  // ✅ Jeden callback
                 },
                 colors = CheckboxDefaults.colors(
                     checkedColor = Color(0xFF4CAF50)
@@ -598,7 +554,7 @@ fun AnimatedMiniGoalItem(
                     }
                 )
 
-                // ✅ Pokaż datę lub "Codziennie"
+                // ✅ Pokaż datę LUB info "Bez daty"
                 if (miniGoal.date != null) {
                     TextButton(
                         onClick = { showMiniGoalDatePicker = true },
@@ -616,30 +572,30 @@ fun AnimatedMiniGoalItem(
                         )
                     }
                 } else {
-                    // ✅ Mini-cel BEZ daty
+                    // ✅ Mini-cel BEZ daty - pokaż info + przycisk dodania daty
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            Icons.Default.Refresh,
+                            Icons.Default.CalendarToday,
                             contentDescription = null,
                             modifier = Modifier.size(14.dp),
-                            tint = Color(0xFF4CAF50)
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
                         Text(
-                            text = "Codziennie • ${miniGoal.dailyCompletions?.size ?: 0} dni",
+                            text = "Bez daty (można dodawać codziennie)",
                             fontSize = 12.sp,
-                            color = Color(0xFF4CAF50)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         )
 
-                        // ✅ Przycisk dodania daty
+                        // Przycisk dodania daty
                         IconButton(
                             onClick = { showMiniGoalDatePicker = true },
                             modifier = Modifier.size(24.dp)
                         ) {
                             Icon(
-                                Icons.Default.CalendarToday,
+                                Icons.Default.Add,
                                 contentDescription = "Dodaj datę",
                                 modifier = Modifier.size(14.dp)
                             )
@@ -669,6 +625,7 @@ fun AnimatedMiniGoalItem(
             isPressed = false
         }
     }
+
 
     // ✅ NOWE: DatePicker dla mini-celu
     if (showMiniGoalDatePicker) {
@@ -710,9 +667,13 @@ fun AnimatedMiniGoalItem(
                                         val goalDeadline = LocalDate.parse(deadline)
 
                                         if (miniDate.isAfter(goalDeadline)) {
+                                            // ✅ NOWE: Pokaż Toast/Snackbar
                                             android.util.Log.e("EditGoalSheet",
-                                                "❌ Data mini-celu późniejsza niż deadline")
-                                            // TODO: Pokaż toast
+                                                "❌ Data mini-celu ($miniDate) późniejsza niż deadline celu ($goalDeadline)")
+
+                                            // TODO: Tutaj dodaj Snackbar z komunikatem
+                                            // "Data mini-celu nie może być późniejsza niż termin głównego celu"
+
                                             showMiniGoalDatePicker = false
                                             return@TextButton
                                         }

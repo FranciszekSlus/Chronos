@@ -120,6 +120,7 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.material3)
 
 
     testImplementation(libs.junit)

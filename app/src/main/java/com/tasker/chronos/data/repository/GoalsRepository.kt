@@ -47,30 +47,28 @@ class GoalsRepository(private val context: Context) {
     /**
      * Pobierz aktywne cele (nieukończone)
      */
-    fun getActiveGoals(): Flow<List<Goal>> {
-        return getAllGoals().map { goals ->
+    fun getActiveGoals(): Flow<List<Goal>> = getAllGoals()
+        .map { goals ->
             goals.filter { !it.isCompleted() }
-        }
-    }
-
-    /**
-     * ✅ NOWE: Pobierz archiwalne cele (ukończone w 100%)
-     */
-    fun getArchivedGoals(): Flow<List<Goal>> {
-        return context.goalsDataStore.data.map { preferences ->
-            val jsonString = preferences[ARCHIVED_GOALS_KEY]
-            if (jsonString.isNullOrBlank()) {
-                emptyList()
-            } else {
-                try {
-                    gson.fromJson(jsonString, goalListType)
-                } catch (e: Exception) {
-                    android.util.Log.e("GoalsRepository", "❌ Błąd deserializacji archiwum: ${e.message}")
-                    emptyList()
+                .also {
+                    android.util.Log.d("GoalsRepository", "🔍 Aktywne cele: ${it.size}")
+                    it.forEach { goal ->
+                        android.util.Log.d("GoalsRepository", "  - ${goal.title} (isCompleted: ${goal.isCompleted()})")
+                    }
                 }
-            }
         }
-    }
+
+    // ✅ Archiwalne cele (ukończone)
+    fun getArchivedGoals(): Flow<List<Goal>> = getAllGoals()
+        .map { goals ->
+            goals.filter { it.isCompleted() }
+                .also {
+                    android.util.Log.d("GoalsRepository", "📦 Cele w archiwum: ${it.size}")
+                    it.forEach { goal ->
+                        android.util.Log.d("GoalsRepository", "  - ${goal.title}")
+                    }
+                }
+        }
 
     suspend fun addGoal(goal: Goal) = mutex.withLock {
         context.goalsDataStore.edit { preferences ->

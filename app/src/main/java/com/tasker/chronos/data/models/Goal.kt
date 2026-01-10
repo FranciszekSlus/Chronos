@@ -82,3 +82,4 @@ data class Goal(
         return allCompleted
     }
 }
+//pozdroo

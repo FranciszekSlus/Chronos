@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.0" // ✅ DODAJ
+
 
 }
 
@@ -54,6 +56,7 @@ android {
 dependencies {
 
     implementation(libs.androidx.core.ktx)
+    implementation("com.mohamedrejeb.richeditor:richeditor-compose:1.0.0-rc05")
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
@@ -83,6 +86,8 @@ dependencies {
     // W pliku app/build.gradle.kts, w sekcji dependencies { ... }
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    // Kotlinx Serialization
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
 
     // Permissions dla Android 13+
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")

@@ -271,7 +271,7 @@ class HabitReminderReceiver : BroadcastReceiver() {
         )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("Czas na nawyk! 🎯")
             .setContentText(habitName)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

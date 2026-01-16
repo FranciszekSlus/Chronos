@@ -31,7 +31,9 @@ fun StartScreen(
     habitsViewModel: HabitsViewModel = viewModel(),
     goalsViewModel: GoalsViewModel = viewModel(),
     initialTab: Int = 0,
-    initialGoalId: String? = null
+    initialGoalId: String? = null,
+    onNavigateToNotes: () -> Unit = {},  // ✅ NOWY PARAMETR
+    onNavigateToShopping: () -> Unit = {}
 ) {
     var selectedTab by remember { mutableStateOf(initialTab) }
 
@@ -120,7 +122,7 @@ fun StartScreen(
                                 androidx.compose.ui.text.TextStyle(
                                     fontWeight = FontWeight.ExtraBold,
                                     shadow = androidx.compose.ui.graphics.Shadow(
-                                        color = Color(0x4D000000), // rgba(0, 0, 0, 0.3)
+                                        color = Color(0x4D000000),
                                         offset = androidx.compose.ui.geometry.Offset(0f, 4f),
                                         blurRadius = 12f
                                     )
@@ -134,6 +136,16 @@ fun StartScreen(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary,
                 ),
+                // ✅ DODAJ TEN KOD PRZED actions:
+                navigationIcon = {
+                    IconButton(onClick = { onNavigateToNotes() }) {  // ✅ DODAJ CALLBACK
+                        Icon(
+                            Icons.Default.Note,  // ✅ UŻYJ IKONY NOTATKI
+                            contentDescription = "Notatki",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                },
                 actions = {
                     // ✅ Przycisk filtrów
                     when (selectedTab) {
@@ -207,6 +219,7 @@ fun StartScreen(
                                     }
                                 }
                             ) {
+
                                 IconButton(onClick = { showGoalFilterSheet = true }) {
                                     Icon(
                                         Icons.Default.FilterList,
@@ -214,10 +227,20 @@ fun StartScreen(
                                         tint = MaterialTheme.colorScheme.onPrimary
                                     )
                                 }
+
                             }
                         }
                     }
+                    IconButton(onClick = { onNavigateToShopping() }) {
+                        Icon(
+                            Icons.Default.ShoppingCart,
+                            contentDescription = "Zakupy",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+
                 }
+
             )
         },
         floatingActionButton = {

@@ -23,16 +23,20 @@ import androidx.navigation.NavType
 import com.tasker.chronos.ui.screens.ArchiveScreen
 import com.tasker.chronos.ui.screens.CalendarScreen
 import com.tasker.chronos.ui.screens.GoalDetailsScreen
+import com.tasker.chronos.ui.screens.NotesScreen
 import com.tasker.chronos.ui.screens.SettingsScreen
+import com.tasker.chronos.ui.screens.ShoppingScreen
 import com.tasker.chronos.ui.screens.StartScreen
 import com.tasker.chronos.ui.screens.StatisticsScreen
 import com.tasker.chronos.viewmodels.CalendarViewModel
 import com.tasker.chronos.viewmodels.EventsViewModel
 import com.tasker.chronos.viewmodels.GoalsViewModel
 import com.tasker.chronos.viewmodels.HabitsViewModel
+import com.tasker.chronos.viewmodels.NotesViewModel
 import com.tasker.chronos.viewmodels.TasksViewModel
 import com.tasker.chronos.viewmodels.UserProfileViewModel
 import com.tasker.chronos.viewmodels.SettingsViewModel
+import com.tasker.chronos.viewmodels.ShoppingViewModel
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     object Home : Screen("home", "Home", Icons.Default.Home)
@@ -48,7 +52,9 @@ fun ChronosNavigation(
     goalsViewModel: GoalsViewModel = viewModel(),
     eventsViewModel: EventsViewModel = viewModel(),
     userProfileViewModel: UserProfileViewModel = viewModel(),
-    settingsViewModel: SettingsViewModel = viewModel()
+    settingsViewModel: SettingsViewModel = viewModel(),
+    notesViewModel: NotesViewModel = viewModel(),  // ✅ NOWY
+    shoppingViewModel: ShoppingViewModel = viewModel()
 
 ) {
     val navController = rememberNavController()
@@ -85,17 +91,24 @@ fun ChronosNavigation(
             modifier = Modifier.padding(innerPadding)
         ) {
             // Podstawowa trasa Home (bez parametrów)
+            // Podstawowa trasa Home
             composable(Screen.Home.route) {
                 StartScreen(
                     habitsViewModel = habitsViewModel,
                     tasksViewModel = tasksViewModel,
-                    goalsViewModel = goalsViewModel,  // ✅ DODAJ
-                    initialTab = 0,  // Tab "Nawyki"
-                    initialGoalId = null
+                    goalsViewModel = goalsViewModel,
+                    initialTab = 0,
+                    initialGoalId = null,
+                    onNavigateToNotes = {  // ✅ DODAJ
+                        navController.navigate("notes")
+                    },
+                    onNavigateToShopping = {  // ✅ DODAJ
+                        navController.navigate("shopping")
+                    }
                 )
             }
 
-// ✅ NOWA TRASA: Home z wybranym tabem i celem
+// Home z parametrami
             composable(
                 route = "home/{tabIndex}/{goalId}",
                 arguments = listOf(
@@ -117,8 +130,14 @@ fun ChronosNavigation(
                     habitsViewModel = habitsViewModel,
                     tasksViewModel = tasksViewModel,
                     goalsViewModel = goalsViewModel,
-                    initialTab = tabIndex,  // Przełącz na odpowiedni tab
-                    initialGoalId = goalId  // Przekaż ID celu do rozwinięcia
+                    initialTab = tabIndex,
+                    initialGoalId = goalId,
+                    onNavigateToNotes = {  // ✅ DODAJ
+                        navController.navigate("notes")
+                    },
+                    onNavigateToShopping = {  // ✅ DODAJ
+                        navController.navigate("shopping")
+                    }
                 )
             }
 
@@ -173,6 +192,25 @@ fun ChronosNavigation(
                     },
                     onNavigateToStatistics = {
                         navController.navigate("statistics")
+                    }
+                )
+            }
+            // ✅ NOWA TRASA: Notatki
+            composable("notes") {
+                NotesScreen(
+                    notesViewModel = notesViewModel,
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+
+// ✅ NOWA TRASA: Zakupy
+            composable("shopping") {
+                ShoppingScreen(
+                    shoppingViewModel = shoppingViewModel,
+                    onNavigateBack = {
+                        navController.popBackStack()
                     }
                 )
             }

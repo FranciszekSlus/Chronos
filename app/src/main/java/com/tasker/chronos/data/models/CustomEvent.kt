@@ -20,7 +20,8 @@ data class CustomEvent(
     val sourceTaskId: String? = null,
     val sourceHabitId: String? = null,
     val sourceGoalId: String? = null,      // ✅ DODAJ TO
-    val sourceMiniGoalId: String? = null   // ✅ DODAJ TO
+    val sourceMiniGoalId: String? = null,
+    val showInMonthView: Boolean = true , // ✅ DODAJ TO
 ) {
 
     /**

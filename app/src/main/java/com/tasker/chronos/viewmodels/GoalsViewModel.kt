@@ -65,10 +65,19 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
 
     }
 
-    fun deleteGoal(goal: Goal) {
+    fun deleteGoal(goal: Goal, eventsViewModel: EventsViewModel) {  // ✅ DODAJ parametr
         viewModelScope.launch(Dispatchers.IO) {
             repository.deleteGoal(goal.id)
             GoalReminderScheduler.cancel(getApplication(), goal)
+
+            // ✅ NOWE: Usuń wszystkie wydarzenia z tego celu (TYLKO jeśli cel NIE jest ukończony)
+            if (!goal.isCompleted()) {
+                eventsViewModel.deleteEventsBySourceGoalId(goal.id)
+                android.util.Log.d("GoalsViewModel", "🗑️ Usunięto wydarzenia z nieukończonego celu")
+            } else {
+                android.util.Log.d("GoalsViewModel", "✅ Cel ukończony - wydarzenia pozostają")
+            }
+
             android.util.Log.d("GoalsViewModel", "🗑️ Usunięto cel: ${goal.title}")
         }
     }
@@ -180,6 +189,9 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
     }
+    /**
+     * ✅ NOWE: Usuń wszystkie wydarzenia pochodzące z danego celu
+     */
 
     /**
      * Dodaj mini-cel do celu
@@ -337,35 +349,31 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
             val filtered = goals.flatMap { goal ->
                 goal.miniGoals
                     .filter { miniGoal ->
-                        // ✅ NOWA LOGIKA:
-                        // 1. Mini-cele Z DATĄ: pokazuj TYLKO jeśli data == dzisiaj I nie ukończone
-                        // 2. Mini-cele BEZ DATY: pokazuj ZAWSZE (można dodawać codziennie) I nie ukończone
+                        // ✅ NOWA PROSTA LOGIKA:
+                        // Pokaż mini-cel JEŚLI:
+                        // 1. NIE jest ukończony
+                        // 2. I (nie ma daty LUB ma datę == dzisiaj)
 
-                        if (miniGoal.date != null) {
-                            // Mini-cel Z DATĄ - sprawdź czy pasuje data
-                            val matchesDate = miniGoal.date == date
-                            val notCompleted = !miniGoal.isCompleted
-
-                            android.util.Log.d("GoalsViewModel",
-                                "    [Z datą] '${miniGoal.title}' - matchesDate($matchesDate), notCompleted($notCompleted)")
-
-                            matchesDate && notCompleted
+                        val notCompleted = !miniGoal.isCompleted
+                        val shouldShow = if (miniGoal.date != null) {
+                            // Ma datę - sprawdź czy pasuje
+                            miniGoal.date == date
                         } else {
-                            // ✅ Mini-cel BEZ DATY - pokazuj ZAWSZE (jeśli nie ukończony)
-                            val notCompleted = !miniGoal.isCompleted
-
-                            android.util.Log.d("GoalsViewModel",
-                                "    [Bez daty] '${miniGoal.title}' - notCompleted($notCompleted)")
-
-                            notCompleted
+                            // Bez daty - pokazuj zawsze
+                            true
                         }
+
+                        android.util.Log.d("GoalsViewModel",
+                            "      Filtr: '${miniGoal.title}' - notCompleted=$notCompleted, shouldShow=$shouldShow")
+
+                        notCompleted && shouldShow
                     }
                     .map { miniGoal -> goal to miniGoal }
             }
 
             android.util.Log.d("GoalsViewModel", "✅ Wynik: ${filtered.size} mini-celów dla $date")
             filtered.forEach { (goal, mini) ->
-                val type = if (mini.date != null) "[Z datą]" else "[Bez daty]"
+                val type = if (mini.date != null) "[Z datą ${mini.date}]" else "[Bez daty]"
                 android.util.Log.d("GoalsViewModel", "  ✓ $type ${mini.title} (z: ${goal.title})")
             }
             android.util.Log.d("GoalsViewModel", "========================================")
@@ -400,9 +408,13 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
             android.util.Log.d("GoalsViewModel", "✅ Zaktualizowano mini-cel: ${updatedMiniGoal.title}")
         }
     }
-    /**
-     * ✅ NOWE: Przełącz status mini-celu CODZIENNEGO (bez daty)
-     */
-
+    // ✅ Przeciążenie dla wywołań bez eventsViewModel (backward compatibility)
+    fun deleteGoal(goal: Goal) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.deleteGoal(goal.id)
+            GoalReminderScheduler.cancel(getApplication(), goal)
+            android.util.Log.d("GoalsViewModel", "⚠️ Usunięto cel BEZ czyszczenia wydarzeń: ${goal.title}")
+        }
+    }
 
 }

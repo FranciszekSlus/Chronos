@@ -57,6 +57,7 @@
     import com.tasker.chronos.notifications.TaskReminderScheduler
     import com.tasker.chronos.ui.components.AddCustomEventDialog
     import com.tasker.chronos.ui.components.EditCustomEventDialog
+    import com.tasker.chronos.ui.components.EditTaskSheet
     import com.tasker.chronos.viewmodels.EventsViewModel
     import com.tasker.chronos.viewmodels.GoalsViewModel
     import com.tasker.chronos.viewmodels.HabitsViewModel
@@ -70,27 +71,78 @@
     fun CalendarDayView(
         eventsViewModel: EventsViewModel,
         selectedDate: LocalDate,
-        tasksViewModel: TasksViewModel? = null,
+        tasksViewModel: TasksViewModel,
         habitsViewModel: HabitsViewModel? = null,
         goalsViewModel: GoalsViewModel? = null,
-        onNavigateToGoal: (String) -> Unit = {}
+        onNavigateToGoal: (String) -> Unit = {},
+        onGoalDialogDismissed: () -> Unit = {}
+
     ) {
+
         val context = LocalContext.current
 
+        // ✅ Inbox: zadania bez daty LUB zadania z datą ale BEZ godziny (tylko dla wybranego dnia)
+        val dateString = selectedDate.toString()
         val density = LocalDensity.current
         val allCustomEvents by eventsViewModel.customEvents.collectAsState()
-    
-        val customEvents = remember(allCustomEvents, selectedDate) {
-            allCustomEvents.filter { event ->
-                event.occursOnDate(selectedDate.toString())
-            }
+
+// ✅ 1. NAJPIERW pobierz zadania z datą na wybrany dzień
+        val allTasksForDay = tasksViewModel.allTasks.collectAsState().value
+            .filter { it.date == dateString && !it.isCompleted }
+
+// ✅ 2. Konwertuj zadania Z godziną na CustomEvent
+        val taskEventsOnGrid = remember(allTasksForDay) {
+            allTasksForDay
+                .filter { it.time != null }
+                .map { task ->
+                    val startParts = task.time!!.split(":")
+                    val startHour = startParts[0].toInt()
+                    val startMinute = startParts[1].toInt()
+
+                    val endHour = (startHour + 1) % 24
+                    val endMinute = startMinute
+
+                    CustomEvent(
+                        id = "task_${task.id}",
+                        title = task.title,
+                        description = task.description,
+                        date = dateString,
+                        startTime = String.format("%02d:%02d", startHour, startMinute),
+                        endTime = String.format("%02d:%02d", endHour, endMinute),
+                        color = when (task.priority) {
+                            TaskPriority.LOW -> 0xFF4CAF50L
+                            TaskPriority.MEDIUM -> 0xFFFFC107L
+                            TaskPriority.HIGH -> 0xFFF44336L
+                        },
+                        hasReminder = task.hasReminder,
+                        reminderMinutesBefore = task.reminderMinutesBefore,
+                        sourceTaskId = task.id,
+                        showInMonthView = false
+                    )
+                }
         }
 
+// ✅ 3. Połącz prawdziwe wydarzenia + zadania z godziną
+        val customEvents = remember(allCustomEvents, taskEventsOnGrid, selectedDate) {
+            val realEvents = allCustomEvents.filter { event ->
+                event.occursOnDate(selectedDate.toString()) &&
+                        event.sourceTaskId == null
+            }
+            realEvents + taskEventsOnGrid
+        }
 
-        val inboxTasks by (tasksViewModel?.inboxTasks ?: MutableStateFlow(emptyList())).collectAsState()
+// ✅ 4. Inbox: zadania bez daty LUB z datą ale BEZ godziny
+        val inboxTasksForDay = remember(allTasksForDay) {
+            val allInboxTasks = tasksViewModel.inboxTasks.value
+            val tasksForDayWithoutTime = allTasksForDay.filter { it.time == null }
+
+            allInboxTasks + tasksForDayWithoutTime
+        }
+
         val allHabits by (habitsViewModel?.habits ?: MutableStateFlow(emptyList())).collectAsState()
         // ✅ Pobierz mini-cele dla wybranego dnia
-        val miniGoalsForToday by remember(selectedDate, goalsViewModel) {
+        // ✅ POPRAWKA: Usuń goalsViewModel z remember - tylko selectedDate
+        val miniGoalsForToday by remember(selectedDate) {  // ❌ USUŃ goalsViewModel
             android.util.Log.d("CalendarView", "🔄 Tworzę flow dla daty: $selectedDate")
             goalsViewModel?.getMiniGoalsForDate(selectedDate.toString())
                 ?: MutableStateFlow(emptyList())
@@ -108,9 +160,10 @@
     
         var showAddDialog by remember { mutableStateOf(false) }
         var showEditDialog by remember { mutableStateOf(false) }
+        var selectedTask by remember { mutableStateOf<Task?>(null) }
+        var showEditTaskSheet by remember { mutableStateOf(false) }
         var selectedEvent by remember { mutableStateOf<CustomEvent?>(null) }
         val scrollState = rememberScrollState()
-    
         var showInboxDrawer by remember { mutableStateOf(false) }
         var draggedTask by remember { mutableStateOf<Task?>(null) }
         var draggedHabit by remember { mutableStateOf<Habit?>(null) }
@@ -118,14 +171,7 @@
         var draggedMiniGoal by remember { mutableStateOf<Pair<Goal, MiniGoal>?>(null) }  // ✅ DODAJ
         var gridTopOffset by remember { mutableStateOf(0f) }
 
-    
-    
-    
-        var recompositionKey by remember { mutableStateOf(0) }
-    
-        LaunchedEffect(customEvents) {
-            recompositionKey++
-        }
+
     
         LaunchedEffect(Unit) {
             val currentHour = LocalTime.now().hour
@@ -150,7 +196,11 @@
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = selectedDate.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM")),
+                            text = selectedDate.format(
+                                java.time.format.DateTimeFormatter.ofPattern(
+                                    "EEEE, d MMMM"
+                                )
+                            ),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             style = TextStyle(
@@ -162,12 +212,43 @@
                             )
                         )
 
+                        // ✅ NOWY KOD (wklej):
                         BadgedBox(
                             badge = {
-                                val totalCount = inboxTasks.size + allHabits.size + miniGoalsForToday.size  // ✅ ZMIEŃ  // ✅ DODAJ mini-cele
+                                // ✅ POPRAWKA: WSZYSTKIE nawyki (codzienne + tygodniowe + miesięczne)
+                                val allHabitsCount = allHabits.size  // ✅ Wszystkie nawyki w inbox
+
+                                // Mini-cele bez daty (codzienne)
+                                val dailyMiniGoalsCount = miniGoalsForToday.count { (_, miniGoal) ->
+                                    miniGoal.date == null
+                                }
+
+                                // ✅ BASELINE = wszystkie nawyki + mini-cele bez daty
+                                val baselineCount = allHabitsCount + dailyMiniGoalsCount
+
+                                // Wszystkie elementy w inbox
+                                val totalCount =
+                                    inboxTasksForDay.size + allHabits.size + miniGoalsForToday.size
+
+                                // ✅ Niebieski TYLKO gdy baseline (czerwony gdy więcej)
+                                val isBaseline = (totalCount == baselineCount)
+
+                                android.util.Log.d(
+                                    "InboxBadge",
+                                    "📊 baseline=$baselineCount (nawyki wszystkie:$allHabitsCount, mini bez daty:$dailyMiniGoalsCount)"
+                                )
+                                android.util.Log.d("InboxBadge", "📊 total=$totalCount")
+                                android.util.Log.d(
+                                    "InboxBadge",
+                                    "📊 isBaseline=$isBaseline (${if (isBaseline) "NIEBIESKI" else "CZERWONY"})"
+                                )
+
                                 if (totalCount > 0) {
                                     Badge(
-                                        containerColor = MaterialTheme.colorScheme.error
+                                        containerColor = if (isBaseline)
+                                            MaterialTheme.colorScheme.primary      // ✅ NIEBIESKI - tylko baseline
+                                        else
+                                            MaterialTheme.colorScheme.error        // ✅ CZERWONY - są dodatkowe
                                     ) {
                                         Text(
                                             text = totalCount.toString(),
@@ -180,7 +261,7 @@
                         ) {
                             IconButton(onClick = { showInboxDrawer = !showInboxDrawer }) {
                                 Icon(
-                                    imageVector = Icons.Default.Inbox, // ✅ Zawsze ikona Inbox
+                                    imageVector = Icons.Default.Inbox,
                                     contentDescription = "Zadania i Nawyki",
                                     tint = MaterialTheme.colorScheme.primary
                                 )
@@ -224,8 +305,18 @@
                                 events = customEvents,
                                 selectedDate = selectedDate,
                                 onEventClick = { event ->
-                                    selectedEvent = event
-                                    showEditDialog = true
+                                    // ✅ Jeśli to zadanie z siatki, otwórz EditTaskSheet
+                                    if (event.sourceTaskId != null && event.id.startsWith("task_")) {
+                                        val originalTask = allTasksForDay.find { it.id == event.sourceTaskId }
+                                        if (originalTask != null) {
+                                            selectedTask = originalTask
+                                            showEditTaskSheet = true
+                                        }
+                                    } else {
+                                        // ✅ Jeśli to prawdziwe wydarzenie, otwórz EditCustomEventDialog
+                                        selectedEvent = event
+                                        showEditDialog = true
+                                    }
                                 },
                                 onEventResizeEnd = { event, newStartMinutes, newEndMinutes ->
                                     val newStart = minutesToTime(newStartMinutes)
@@ -283,7 +374,7 @@
                                     GoalDeadlineBlock(
                                         goal = goal,
                                         onClick = {
-                                            onNavigateToGoal(goal.id)  // ✅ Usuń ?. bo już nie jest nullable
+                                            onNavigateToGoal(goal.id)
                                         }
                                     )
                                 }
@@ -298,7 +389,7 @@
                     exit = slideOutHorizontally(targetOffsetX = { it })
                 ) {
                     InboxDrawer(
-                        tasks = inboxTasks,
+                        tasks = inboxTasksForDay,  // ✅ Użyj nowej zmiennej
                         habits = allHabits,
                         miniGoals = miniGoalsForToday,
                         onTaskDragStart = { task, position ->
@@ -313,9 +404,10 @@
                         onMiniGoalDrag = { newPosition ->
                             dragOffset = newPosition
                         },
+                        // ✅ NOWY KOD (prawidłowa struktura):
                         onMiniGoalDragEnd = {
                             android.util.Log.d("CalendarView", "🎯 onMiniGoalDragEnd wywołane")
-                            android.util.Log.d("CalendarView", "🎯 draggedMiniGoal: ${draggedMiniGoal?.second?.title}")
+
                             if (draggedMiniGoal != null) {
                                 val (goal, miniGoal) = draggedMiniGoal!!
                                 val fingerY = dragOffset.y
@@ -327,9 +419,9 @@
                                     android.util.Log.d("CalendarView", "MiniGoal dropped outside - returning to inbox")
                                     draggedMiniGoal = null
                                 } else {
+                                    // Oblicz pozycję czasową
                                     val headerHeight = 490f
                                     val cardOffset = with(density) { 120.dp.toPx() }
-
                                     val positionInGrid = (fingerY - headerHeight + cardOffset) + scrollState.value
                                     val dp = with(density) { positionInGrid.toDp().value }
                                     val totalMinutes = (dp / 2).toInt().coerceIn(0, 1439)
@@ -338,24 +430,24 @@
                                     val minutes = totalMinutes % 60
                                     val roundedMinutes = (minutes / 15) * 15
 
-                                    val startTime = String.format("%02d:%02d", hours, roundedMinutes)
-                                    val endTime = String.format("%02d:%02d", (hours + 1) % 24, roundedMinutes)
-                                    val colorLong = goal.color
+                                    val startTimeText = String.format("%02d:%02d", hours, roundedMinutes)
+                                    val endTimeText = String.format("%02d:%02d", (hours + 1) % 24, roundedMinutes)
 
+                                    android.util.Log.d("CalendarView", "✅ Mini-cel '${miniGoal.title}' zaplanowany na $startTimeText")
+
+                                    // Dodaj wydarzenie
                                     eventsViewModel.addCustomEvent(
                                         CustomEvent(
                                             title = miniGoal.title,
-                                            description = "Z celu: ${goal.title}",
                                             date = selectedDate.toString(),
-                                            startTime = startTime,
-                                            endTime = endTime,
-                                            color = colorLong,
-                                            sourceGoalId = goal.id,
-                                            sourceMiniGoalId = miniGoal.id
+                                            startTime = startTimeText,
+                                            endTime = endTimeText,
+                                            color = 0xFFFF9800L,
+                                            sourceMiniGoalId = miniGoal.id,
+                                            sourceGoalId = goal.id  // ✅ WAŻNE!
                                         )
                                     )
 
-                                    android.util.Log.d("CalendarView", "✅ Mini-cel '${miniGoal.title}' został zaplanowany.")
                                     draggedMiniGoal = null
                                 }
                             }
@@ -391,44 +483,20 @@
                                     val dp = with(density) { positionInGrid.toDp().value }
                                     val totalMinutes = (dp / 2).toInt().coerceIn(0, 1439)
 
-                                    android.util.Log.d("CalendarView", "TASK: fingerY=$fingerY, cardOffset=$cardOffset, dp=$dp, minutes=$totalMinutes")
-
                                     val hours = totalMinutes / 60
                                     val minutes = totalMinutes % 60
                                     val roundedMinutes = (minutes / 15) * 15
 
                                     val startTime = String.format("%02d:%02d", hours, roundedMinutes)
-                                    val endTime = String.format("%02d:%02d", (hours + 1) % 24, roundedMinutes)
 
-                                    eventsViewModel.addCustomEvent(
-                                        CustomEvent(
-                                            title = draggedTask!!.title,              // ✅ POPRAWNE!
-                                            description = draggedTask!!.description,  // ✅ POPRAWNE!
-                                            date = selectedDate.toString(),
-                                            startTime = startTime,
-                                            endTime = endTime,
-                                            color = when (draggedTask!!.priority) {   // ✅ POPRAWNE!
-                                                TaskPriority.LOW -> 0xFF4CAF50L
-                                                TaskPriority.MEDIUM -> 0xFFFFC107L
-                                                TaskPriority.HIGH -> 0xFFF44336L
-                                            },
-                                            hasReminder = draggedTask!!.hasReminder,  // ✅ POPRAWNE!
-                                            reminderMinutesBefore = draggedTask!!.reminderMinutesBefore, // ✅ POPRAWNE!
-                                            sourceTaskId = draggedTask!!.id           // ✅ POPRAWNE!
-                                        )
-                                    )
-
+                                    // ✅ ZMIANA: Tylko zaktualizuj zadanie, NIE twórz CustomEvent
                                     tasksViewModel?.assignDateToTask(
                                         taskId = draggedTask!!.id,
                                         date = selectedDate.toString(),
-                                        time = startTime
+                                        time = startTime  // ✅ Przypisz godzinę do zadania
                                     )
 
-                                    TaskReminderScheduler.cancel(
-                                        context = context,  // Musisz dostać context - patrz niżej
-                                        task = draggedTask!!
-                                    )
-                                    android.util.Log.d("CalendarView", "🔕 Anulowano przypomnienie zadania (przejęte przez CustomEvent)")
+                                    android.util.Log.d("CalendarView", "✅ Zadanie '${draggedTask!!.title}' zaplanowane na $startTime")
                                     draggedTask = null
                                 }
                             }
@@ -511,7 +579,7 @@
                             draggedTask != null -> draggedTask!!.priority.toColor().copy(alpha = 0.9f)
                             draggedMiniGoal != null -> {
                                 // ✅ goal.color jest już typu Long, więc użyj bezpośrednio
-                                Color(draggedMiniGoal!!.first.color).copy(alpha = 0.9f)
+                                Color(0xFFFFD700).copy(alpha = 0.9f)
                             }
                             else -> Color(0xFF4CAF50).copy(alpha = 0.9f)
                         }
@@ -553,10 +621,17 @@
                 Icon(Icons.Default.Add, contentDescription = "Dodaj wydarzenie")
             }
         }
-    
+
         if (showAddDialog) {
+            // ✅ Znajdź ostatnie wydarzenie dzisiaj (najwyższy endTime)
+            val lastEvent = customEvents
+                .filter { it.date == selectedDate.toString() }
+                .maxByOrNull { parseTimeToMinutes(it.endTime) }
+
             AddCustomEventDialog(
                 date = selectedDate.toString(),
+                lastEventEndTime = lastEvent?.endTime,
+                showMonthViewToggle = true,
                 onDismiss = { showAddDialog = false },
                 onConfirm = { event ->
                     eventsViewModel.addCustomEvent(event)
@@ -592,6 +667,26 @@
 
                     showEditDialog = false
                     selectedEvent = null
+                }
+            )
+        }
+        // ✅ NOWY DIALOG: Edycja zadania z siatki
+        if (showEditTaskSheet && selectedTask != null) {
+            EditTaskSheet(
+                task = selectedTask!!,
+                onDismiss = {
+                    showEditTaskSheet = false
+                    selectedTask = null
+                },
+                onSave = { updatedTask ->
+                    tasksViewModel?.updateTask(updatedTask)
+                    showEditTaskSheet = false
+                    selectedTask = null
+                },
+                onDelete = { taskToDelete ->
+                    tasksViewModel?.deleteTask(taskToDelete)
+                    showEditTaskSheet = false
+                    selectedTask = null
                 }
             )
         }
@@ -1379,13 +1474,17 @@
         goal: Goal,
         onClick: () -> Unit
     ) {
-        // Deadline o 8:00 rano
+        android.util.Log.d(
+            "GoalDeadline",
+            "🏆 Rendering deadline for: ${goal.title}, progress: ${goal.getProgressPercentage()}%"
+        )
+
         val topOffset = (8 * 60) * 2  // 960 dp (8 godzin * 60 minut * 2dp)
 
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.95f)
-                .height(60.dp)
+                .height(100.dp)
                 .offset(y = topOffset.dp)
                 .padding(horizontal = 4.dp, vertical = 2.dp)
                 .align(Alignment.TopStart)
@@ -1401,48 +1500,89 @@
                     .background(
                         brush = Brush.horizontalGradient(
                             colors = listOf(
-                                Color(0xFFFFD700),  // Złoty
-                                Color(0xFFFFA500)   // Pomarańczowy
+                                Color(0xFFFFD700),
+                                Color(0xFFFFA500)
                             )
                         )
                     )
-                    .padding(12.dp)
+                    .padding(12.dp)  // ✅ Zwiększ padding
             ) {
-                Row(
+                Column(  // ✅ ZMIEŃ z Row na Column dla lepszej organizacji
                     modifier = Modifier.fillMaxSize(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Icon(
-                        Icons.Default.EmojiEvents,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
-                    )
+                    // ✅ GÓRA: Ikona + "DEADLINE"
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.EmojiEvents,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)  // ✅ Zmniejsz ikonę
+                        )
 
-                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             "🏆 DEADLINE",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White.copy(alpha = 0.9f)
                         )
-                        Text(
-                            goal.title,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            maxLines = 1
-                        )
                     }
 
-                    Icon(
-                        Icons.Default.ChevronRight,
-                        contentDescription = "Przejdź",
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
+                    // ✅ ŚRODEK: Nazwa celu
+                    Text(
+                        goal.title,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        modifier = Modifier.fillMaxWidth(0.9f)
                     )
+
+                    // ✅ DÓŁ: Pasek postępu + procent
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // ✅ Pasek postępu
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(8.dp)
+                                .background(
+                                    Color.White.copy(alpha = 0.3f),
+                                    RoundedCornerShape(4.dp)
+                                )
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(goal.getProgress())  // ✅ 0.0 - 1.0
+                                    .background(
+                                        Color.White,
+                                        RoundedCornerShape(4.dp)
+                                    )
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // ✅ Procent
+                        Text(
+                            "${goal.getProgressPercentage()}%",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
                 }
             }
         }
     }
+
+
+
+

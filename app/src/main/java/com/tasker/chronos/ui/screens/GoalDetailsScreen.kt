@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tasker.chronos.data.models.Goal
 import com.tasker.chronos.data.models.MiniGoal
+import com.tasker.chronos.viewmodels.EventsViewModel
 import com.tasker.chronos.viewmodels.GoalsViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -26,7 +27,8 @@ fun GoalDetailsScreen(
     goal: Goal,
     goalsViewModel: GoalsViewModel,
     onNavigateBack: () -> Unit,
-    onOpenEditSheet: () -> Unit = {}
+    onOpenEditSheet: () -> Unit = {},
+    eventsViewModel: EventsViewModel
 ) {
     var showAddMiniGoalDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -273,7 +275,7 @@ fun GoalDetailsScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        goalsViewModel.deleteGoal(goal)
+                        goalsViewModel.deleteGoal(goal, eventsViewModel)
                         onNavigateBack()
                     },
                     colors = ButtonDefaults.buttonColors(

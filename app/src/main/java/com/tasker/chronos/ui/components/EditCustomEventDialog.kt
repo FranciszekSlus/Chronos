@@ -47,12 +47,15 @@ fun EditCustomEventDialog(
     var selectedColor by remember { mutableStateOf(event.color) }  // ✅ DODANE
     var hasReminder by remember { mutableStateOf(event.hasReminder) }
     var reminderMinutes by remember { mutableStateOf(event.reminderMinutesBefore) }
-
+    var reminderUnit by remember { mutableStateOf(ReminderUnit.MINUTES) }
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }  // ✅ NOWE
     var showStartTimePicker by remember { mutableStateOf(false) }
     var showEndTimePicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showInMonthView by remember { mutableStateOf(event.showInMonthView) }
+    var reminderValue by remember { mutableStateOf(15) }
+
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -178,49 +181,131 @@ fun EditCustomEventDialog(
                         )
                     }
                 }
-
                 Divider()
 
-                // Przypomnienie
-                Row(
+// ✅ NOWE: Info o powiadomieniu w momencie rozpoczęcia (tak jak w Add)
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Przypomnienie")
-                    Switch(
-                        checked = hasReminder,
-                        onCheckedChange = { hasReminder = it }
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
                     )
-                }
-
-                if (hasReminder) {
+                ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Przypominaj na", fontSize = 12.sp)
-
-                        FilterChip(
-                            selected = reminderMinutes == 15,
-                            onClick = { reminderMinutes = 15 },
-                            label = { Text("15 min") }
+                        Icon(
+                            Icons.Default.Notifications,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
                         )
-                        FilterChip(
-                            selected = reminderMinutes == 30,
-                            onClick = { reminderMinutes = 30 },
-                            label = { Text("30 min") }
-                        )
-                        FilterChip(
-                            selected = reminderMinutes == 60,
-                            onClick = { reminderMinutes = 60 },
-                            label = { Text("1h") }
+                        Text(
+                            "Powiadomienie w momencie rozpoczęcia",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
 
                 Divider()
+
+// ✅ NOWE: Dodatkowe przypomnienie (opcjonalne)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Dodatkowe przypomnienie", fontWeight = FontWeight.Medium)
+                        Switch(
+                            checked = hasReminder,
+                            onCheckedChange = { hasReminder = it }
+                        )
+                    }
+                }
+
+                if (hasReminder) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("Przypomnij przed:", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+
+                        // ✅ Pole do wpisania wartości
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = reminderValue.toString(),
+                                onValueChange = {
+                                    reminderValue = it.toIntOrNull()?.coerceIn(1, 999) ?: 15
+                                },
+                                label = { Text("Ilość") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+
+                            // ✅ Dropdown z jednostkami
+                            var expanded by remember { mutableStateOf(false) }
+
+                            ExposedDropdownMenuBox(
+                                expanded = expanded,
+                                onExpandedChange = { expanded = !expanded },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                OutlinedTextField(
+                                    value = reminderUnit.label,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Jednostka") },
+                                    trailingIcon = {
+                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                                    },
+                                    modifier = Modifier.menuAnchor()
+                                )
+
+                                ExposedDropdownMenu(
+                                    expanded = expanded,
+                                    onDismissRequest = { expanded = false }
+                                ) {
+                                    ReminderUnit.values().forEach { unit ->
+                                        DropdownMenuItem(
+                                            text = { Text(unit.label) },
+                                            onClick = {
+                                                reminderUnit = unit
+                                                expanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // ✅ Podgląd
+                        Text(
+                            text = "Powiadomienie: ${reminderValue * reminderUnit.multiplier} minut przed",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+                    }
+                }
+
+
 
                 // Przycisk usuwania
                 // ✅ Przycisk usuwania - info o wielodniowym
@@ -267,7 +352,8 @@ fun EditCustomEventDialog(
                                 endTime = endTime,
                                 color = selectedColor,  // ✅ DODANE
                                 hasReminder = hasReminder,
-                                reminderMinutesBefore = reminderMinutes
+                                reminderMinutesBefore = reminderMinutes,
+                                showInMonthView = showInMonthView
                             )
                         )
                     }
@@ -375,6 +461,7 @@ fun EditCustomEventDialog(
                     )
                 }
             },
+
             confirmButton = {
                 Button(
                     onClick = {
@@ -394,5 +481,6 @@ fun EditCustomEventDialog(
                 }
             }
         )
+
     }
 }

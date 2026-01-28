@@ -86,6 +86,7 @@ dependencies {
     // W pliku app/build.gradle.kts, w sekcji dependencies { ... }
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("androidx.compose.foundation:foundation:1.5.4")
     // Kotlinx Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
 
@@ -126,6 +127,7 @@ dependencies {
     implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.material3)
+    implementation(libs.androidx.room.ktx)
 
 
     testImplementation(libs.junit)

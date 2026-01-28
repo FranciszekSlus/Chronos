@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tasker.chronos.data.models.CustomEvent
 import com.tasker.chronos.data.models.EventType
 import com.tasker.chronos.data.models.Goal
 import com.tasker.chronos.data.models.Task
@@ -61,6 +62,7 @@ fun MonthView(
         emptyList()
     }
 
+
     val highPriorityTasks = if (tasksViewModel != null) {
         val allTasks = tasksViewModel.allTasks.collectAsState().value
         allTasks.filter { it.priority == TaskPriority.HIGH && it.date != null }
@@ -82,9 +84,11 @@ fun MonthView(
     val eventColorsPerDay = remember(customEvents) {
         val colorsMap = mutableMapOf<String, MutableList<Long>>()
         customEvents.forEach { event ->
-            val allDates = event.getAllDates()
-            allDates.forEach { date ->
-                colorsMap.getOrPut(date) { mutableListOf() }.add(event.color)
+            if (event.showInMonthView) {  // ✅ DODAJ TEN WARUNEK
+                val allDates = event.getAllDates()
+                allDates.forEach { date ->
+                    colorsMap.getOrPut(date) { mutableListOf() }.add(event.color)
+                }
             }
         }
         colorsMap
@@ -218,6 +222,7 @@ fun MonthView(
     if (showAddDialog && eventsViewModel != null) {
         AddCustomEventDialog(
             date = selectedDialogDate.toString(),
+            showMonthViewToggle = false,
             onDismiss = { showAddDialog = false },
             onConfirm = { event ->
                 eventsViewModel.addCustomEvent(event)

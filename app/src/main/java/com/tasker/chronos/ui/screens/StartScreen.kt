@@ -19,6 +19,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tasker.chronos.data.models.*
 import com.tasker.chronos.ui.components.*
 import com.tasker.chronos.ui.dialogs.AddGoalDialog
+import com.tasker.chronos.viewmodels.EventsViewModel
 import com.tasker.chronos.viewmodels.TasksViewModel
 import com.tasker.chronos.viewmodels.HabitsViewModel
 import com.tasker.chronos.viewmodels.GoalsViewModel
@@ -30,6 +31,7 @@ fun StartScreen(
     tasksViewModel: TasksViewModel = viewModel(),
     habitsViewModel: HabitsViewModel = viewModel(),
     goalsViewModel: GoalsViewModel = viewModel(),
+    eventsViewModel: EventsViewModel = viewModel(),
     initialTab: Int = 0,
     initialGoalId: String? = null,
     onNavigateToNotes: () -> Unit = {},  // ✅ NOWY PARAMETR
@@ -87,13 +89,18 @@ fun StartScreen(
             selectedTab = 2
         }
     }
-    LaunchedEffect(initialGoalId, filteredGoals) {
-        if (initialGoalId != null) {
+    var hasHandledInitialGoal by remember { mutableStateOf(false) }
+
+    LaunchedEffect(initialGoalId) {  // ✅ USUŃ filteredGoals z dependency!
+        if (initialGoalId != null && !hasHandledInitialGoal) {
             selectedTab = 2
-            // Znajdź cel i otwórz EditGoalSheet
+
+            // Poczekaj aż filteredGoals będzie gotowy
             val goal = filteredGoals.find { it.id == initialGoalId }
             if (goal != null) {
                 selectedGoal = goal
+                hasHandledInitialGoal = true  // ✅ Oznacz jako obsłużone
+                android.util.Log.d("StartScreen", "✅ Otwarto EditGoalSheet dla: ${goal.title} (z deadline)")
             }
         }
     }
@@ -315,6 +322,7 @@ fun StartScreen(
                     viewModel = goalsViewModel,
                     initialExpandedGoalId = initialGoalId,
                     onGoalClick = { goal ->
+                        android.util.Log.d("StartScreen", "🎯 Clicked goal: ${goal.title}")
                         selectedGoal = goal  // ✅ POPRAWKA: Ustaw selectedGoal
                     },
                     onGoalCompleted = { message ->
@@ -427,19 +435,35 @@ fun StartScreen(
         )
     }
 
-    selectedGoal?.let { goalSnapshot ->
+    if (selectedGoal != null) {
+        val goalSnapshot = selectedGoal!!
         val currentGoal = filteredGoals.find { it.id == goalSnapshot.id }
+
+        // ✅ DODAJ: Reset selectedGoal po zamknięciu arkusza
+        DisposableEffect(goalSnapshot.id) {
+            onDispose {
+                android.util.Log.d("StartScreen", "🔄 DisposableEffect - czyszczę selectedGoal")
+                selectedGoal = null
+            }
+        }
+
 
         if (currentGoal != null) {
             EditGoalSheet(
                 goal = currentGoal,
-                onDismiss = { selectedGoal = null },
+                onDismiss = {
+                    android.util.Log.d("StartScreen", "❌ onDismiss - zamykam arkusz")
+                    selectedGoal = null
+                },
                 onSave = { updatedGoal ->
                     goalsViewModel.updateGoal(updatedGoal)
                     selectedGoal = null
                 },
                 onDelete = { goalToDelete ->
-                    goalsViewModel.deleteGoal(goalToDelete)
+                    android.util.Log.d("EditGoalSheet", "🗑️ Usuwam cel: ${goalToDelete.title}")
+                    android.util.Log.d("EditGoalSheet", "📊 isCompleted: ${goalToDelete.isCompleted()}")
+
+                    goalsViewModel.deleteGoal(goalToDelete, eventsViewModel)  // ✅ PRZEKAŻ eventsViewModel!
                     selectedGoal = null
                 },
                 onToggleMiniGoal = { miniGoalId ->
@@ -461,11 +485,10 @@ fun StartScreen(
                 }
             )
         } else {
-            LaunchedEffect(Unit) {
                 selectedGoal = null
             }
         }
-    }
+
 
     if (showCompletionToast) {
         CompletionToast(
@@ -592,17 +615,22 @@ fun GoalsTab(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(goals, key = { it.id }) { goal ->
+                    // ✅ NOWY KOD:
                     GoalItem(
                         goal = goal,
-                        onGoalClick = { onGoalClick(goal) },
+                        onGoalClick = {
+                            android.util.Log.d("GoalsTab", "🎯 onGoalClick wywołany dla: ${goal.title}")
+                            onGoalClick(goal)
+                        },
                         onToggleGoalCompleted = { goalId ->
+                            android.util.Log.d("GoalsTab", "✅ toggleGoalCompleted: $goalId")
                             viewModel.toggleGoalCompleted(goalId)
                         },
-                        // ✅ NOWY KOD - prosty callback bez logiki
                         onToggleMiniGoal = { miniGoalId ->
+                            android.util.Log.d("GoalsTab", "🔘 toggleMiniGoal: $miniGoalId w celu: ${goal.id}")
                             viewModel.toggleMiniGoalCompleted(goal.id, miniGoalId)
+                            // ✅ USUŃ wszelkie wywołania onGoalClick(goal) stąd!
                         },
-
                         isExpanded = expandedGoalId == goal.id,
                         onExpandToggle = {
                             expandedGoalId = if (expandedGoalId == goal.id) null else goal.id

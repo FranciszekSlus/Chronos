@@ -20,6 +20,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
+import com.tasker.chronos.ui.components.calendar.CalendarDayView
 import com.tasker.chronos.ui.screens.ArchiveScreen
 import com.tasker.chronos.ui.screens.CalendarScreen
 import com.tasker.chronos.ui.screens.GoalDetailsScreen
@@ -153,6 +154,7 @@ fun ChronosNavigation(
                     GoalDetailsScreen(
                         goal = goal,
                         goalsViewModel = goalsViewModel,
+                        eventsViewModel = eventsViewModel,  // ✅ DODAJ
                         onNavigateBack = { navController.popBackStack() }
                     )
                 }
@@ -179,6 +181,7 @@ fun ChronosNavigation(
                     }
                 )
             }
+
 
             composable(Screen.Settings.route) {
                 SettingsScreen(

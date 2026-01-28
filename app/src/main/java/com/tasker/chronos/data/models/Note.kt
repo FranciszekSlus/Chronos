@@ -16,27 +16,8 @@ data class Note(
     @Serializable(with = LocalDateTimeSerializer::class)
     val updatedAt: LocalDateTime = LocalDateTime.now(),
     val isPinned: Boolean = false,
-    val formatting: List<TextFormat> = emptyList()
+    val checkboxItems: Map<String, Boolean> = emptyMap() // ✅ ID checkboxa -> czy zaznaczony
 )
-
-@Serializable
-data class TextFormat(
-    val start: Int,
-    val end: Int,
-    val type: FormatType
-)
-
-@Serializable
-enum class FormatType {
-    BOLD,
-    ITALIC,
-    UNDERLINE,
-    STRIKETHROUGH,
-    HEADING1,
-    HEADING2,
-    CHECKBOX_UNCHECKED,
-    CHECKBOX_CHECKED
-}
 
 @Serializable
 data class NoteCategory(
@@ -45,7 +26,6 @@ data class NoteCategory(
     val color: String = "#2196F3"
 )
 
-// ✅ Serializer dla LocalDateTime
 object LocalDateTimeSerializer : kotlinx.serialization.KSerializer<LocalDateTime> {
     override val descriptor = kotlinx.serialization.descriptors.PrimitiveSerialDescriptor(
         "LocalDateTime",

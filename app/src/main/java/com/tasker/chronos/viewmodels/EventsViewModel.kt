@@ -106,7 +106,10 @@ class EventsViewModel(application: Application) : AndroidViewModel(application) 
             android.util.Log.d("EventsViewModel", "➕ addCustomEvent wywołany")
             android.util.Log.d("EventsViewModel", "➕ Event: ${event.title}")
             android.util.Log.d("EventsViewModel", "➕ Data: ${event.date}")
-            android.util.Log.d("EventsViewModel", "➕ Start: ${event.startTime}, End: ${event.endTime}")
+            android.util.Log.d(
+                "EventsViewModel",
+                "➕ Start: ${event.startTime}, End: ${event.endTime}"
+            )
 
             customEventsRepository.addEvent(event)
 
@@ -126,7 +129,10 @@ class EventsViewModel(application: Application) : AndroidViewModel(application) 
             android.util.Log.d("EventsViewModel", "🔄 updateCustomEvent wywołany")
             android.util.Log.d("EventsViewModel", "🔄 Event ID: ${event.id}")
             android.util.Log.d("EventsViewModel", "🔄 Nowy tytuł: ${event.title}")
-            android.util.Log.d("EventsViewModel", "🔄 Nowy czas: ${event.startTime} - ${event.endTime}")
+            android.util.Log.d(
+                "EventsViewModel",
+                "🔄 Nowy czas: ${event.startTime} - ${event.endTime}"
+            )
 
             customEventsRepository.updateEvent(event)
 
@@ -138,7 +144,10 @@ class EventsViewModel(application: Application) : AndroidViewModel(application) 
 
             delay(100)
             val updated = customEvents.value.find { it.id == event.id }
-            android.util.Log.d("EventsViewModel", "🔍 Sprawdzenie: ${updated?.startTime} - ${updated?.endTime}")
+            android.util.Log.d(
+                "EventsViewModel",
+                "🔍 Sprawdzenie: ${updated?.startTime} - ${updated?.endTime}"
+            )
             android.util.Log.d("EventsViewModel", "════════════════════════════════")
         }
     }
@@ -153,7 +162,10 @@ class EventsViewModel(application: Application) : AndroidViewModel(application) 
             // ✅ NOWY SYSTEM: Anuluj wszystkie powiadomienia
             event?.let {
                 CustomEventScheduler.cancel(getApplication(), it)
-                android.util.Log.d("EventsViewModel", "🗑️ Usunięto wydarzenie + anulowano powiadomienia: ${it.title}")
+                android.util.Log.d(
+                    "EventsViewModel",
+                    "🗑️ Usunięto wydarzenie + anulowano powiadomienia: ${it.title}"
+                )
             }
         }
     }
@@ -197,5 +209,37 @@ class EventsViewModel(application: Application) : AndroidViewModel(application) 
 
     fun nextDay() {
         _selectedDate.value = _selectedDate.value.plusDays(1)
+    }
+
+
+    /**
+     * ✅ NOWE: Usuń wszystkie wydarzenia pochodzące z danego celu
+     */
+    // ✅ NOWY KOD:
+    // ✅ ZNAJDŹ I ZASTĄP TĘ FUNKCJĘ:
+    // ✅ POPRAWNA WERSJA:
+    // ✅ POPRAWIONA WERSJA:
+    // ✅ POPRAWIONA WERSJA (zmień TYLKO tę linię):
+    // ✅ ZAMIEŃ deleteEventsBySourceGoalId NA TO:
+    fun deleteEventsBySourceGoalId(goalId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            android.util.Log.d("EventsViewModel", "🔍 Szukam wydarzeń dla celu: $goalId")
+
+            // ✅ ZMIANA: Pobierz ŚWIEŻE dane z DataStore zamiast z Flow
+            val freshEvents = customEventsRepository.getAllCustomEvents().first()  // ✅ DODAJ .first()
+
+            val eventsToDelete = freshEvents.filter { event ->
+                event.sourceGoalId == goalId
+            }
+
+            android.util.Log.d("EventsViewModel", "📊 Znaleziono: ${eventsToDelete.size} wydarzeń")
+
+            eventsToDelete.forEach { event ->
+                customEventsRepository.deleteEvent(event.id)
+                android.util.Log.d("EventsViewModel", "   🗑️ Usunięto: ${event.title}")
+            }
+
+            android.util.Log.d("EventsViewModel", "✅ Usunięto ${eventsToDelete.size} wydarzeń z celu: $goalId")
+        }
     }
 }

@@ -16,6 +16,7 @@ import com.tasker.chronos.data.models.Goal
 import com.tasker.chronos.data.models.Task
 import com.tasker.chronos.ui.components.GoalItem
 import com.tasker.chronos.ui.components.TaskItem
+import com.tasker.chronos.viewmodels.EventsViewModel
 import com.tasker.chronos.viewmodels.GoalsViewModel
 import com.tasker.chronos.viewmodels.TasksViewModel
 
@@ -24,6 +25,7 @@ import com.tasker.chronos.viewmodels.TasksViewModel
 fun ArchiveScreen(
     tasksViewModel: TasksViewModel = viewModel(),
     goalsViewModel: GoalsViewModel = viewModel(),
+    eventsViewModel: EventsViewModel = viewModel(),
     onNavigateBack: () -> Unit
 ) {
     val archivedTasks by tasksViewModel.archivedTasks.collectAsState()
@@ -99,7 +101,7 @@ fun ArchiveScreen(
                         goalsViewModel.updateGoal(goal.copy(miniGoals = updatedMiniGoals))
                     },
                     onDeleteGoal = { goal ->
-                        goalsViewModel.deleteGoal(goal) // ✅ Przekaż cały Goal
+                        goalsViewModel.deleteGoal(goal, eventsViewModel)// ✅ Przekaż cały Goal
                     }
                 )
             }

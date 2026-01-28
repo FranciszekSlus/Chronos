@@ -223,11 +223,20 @@ fun GoalItem(
                             modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                         )
 
+
+                        // ✅ NOWY KOD:
                         goal.miniGoals.forEach { miniGoal ->
                             MiniGoalCheckboxItem(
                                 miniGoal = miniGoal,
-                                isCompleted = miniGoal.isCompleted,  // ✅ Prosto - sprawdź flagę
-                                onToggle = { onToggleMiniGoal?.invoke(miniGoal.id) },  // ✅ Jeden callback
+                                isCompleted = miniGoal.isCompleted,
+                                onToggle = {
+                                    android.util.Log.d(
+                                        "GoalItem",
+                                        "🔘 Mini-goal toggled: ${miniGoal.title}"
+                                    )
+                                    onToggleMiniGoal?.invoke(miniGoal.id)
+                                    // ❌ NIE WOLNO tutaj wywołać onGoalClick()
+                                },
                                 showDate = miniGoal.date != null
                             )
                         }
@@ -260,7 +269,10 @@ fun GoalItem(
                         }
 
                         Button(
-                            onClick = onGoalClick,
+                            onClick = {
+                                android.util.Log.d("GoalItem", "🔘 EDIT button clicked for: ${goal.title}")
+                                onGoalClick()
+                            },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(

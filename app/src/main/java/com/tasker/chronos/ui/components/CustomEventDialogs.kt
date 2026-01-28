@@ -41,7 +41,9 @@ enum class ReminderUnit(val label: String, val multiplier: Int) {
 fun AddCustomEventDialog(
     date: String,
     onDismiss: () -> Unit,
-    onConfirm: (CustomEvent) -> Unit
+    lastEventEndTime: String? = null,
+    onConfirm: (CustomEvent) -> Unit,
+    showMonthViewToggle: Boolean = true
 ) {
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -49,9 +51,27 @@ fun AddCustomEventDialog(
     val startDate = date  // ✅ Data rozpoczęcia = wybrany dzień (bez UI)
     var endDate by remember { mutableStateOf<String?>(null) }
     var isMultiDay by remember { mutableStateOf(false) }
+    var showInMonthView by remember { mutableStateOf(!showMonthViewToggle) }  // ✅ false dla DayView, true dla MonthView
 
-    var startTime by remember { mutableStateOf("08:00") }
-    var endTime by remember { mutableStateOf("09:00") }
+    // ✅ POPRAWIONE: Automatyczna godzina na podstawie lastEventEndTime
+    // ✅ POPRAWIONE: Automatyczna godzina na podstawie lastEventEndTime
+    val defaultStartTime = lastEventEndTime ?: "08:00"
+    val defaultEndTime = remember(defaultStartTime) {
+        try {
+            val parts = defaultStartTime.split(":")
+            val hour = parts[0].toInt()
+            val minute = parts[1].toInt()
+
+            // Dodaj 1 godzinę do czasu zakończenia poprzedniego wydarzenia
+            val newHour = (hour + 1) % 24
+            String.format("%02d:%02d", newHour, minute)
+        } catch (e: Exception) {
+            "09:00"
+        }
+    }
+
+    var startTime by remember { mutableStateOf(defaultStartTime) }  // ✅ Użyj obliczonej wartości
+    var endTime by remember { mutableStateOf(defaultEndTime) }
 
     var selectedColor by remember { mutableStateOf(0xFF2196F3L) }
     var hasCustomReminder by remember { mutableStateOf(false) }  // ✅ Zmieniona nazwa
@@ -61,6 +81,7 @@ fun AddCustomEventDialog(
     var showEndDatePicker by remember { mutableStateOf(false) }
     var showStartTimePicker by remember { mutableStateOf(false) }
     var showEndTimePicker by remember { mutableStateOf(false) }
+
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -209,6 +230,7 @@ fun AddCustomEventDialog(
                 }
 
 // ✅ Dodatkowe przypomnienie (opcjonalne)
+
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -227,6 +249,43 @@ fun AddCustomEventDialog(
                             checked = hasCustomReminder,
                             onCheckedChange = { hasCustomReminder = it }
                         )
+                    }
+                }
+
+                // ✅ Checkbox widoczności - TYLKO jeśli showMonthViewToggle = true
+                if (showMonthViewToggle) {
+                    Divider()
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Widoczny w widoku miesiąca",
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 14.sp
+                                )
+                                Text(
+                                    "Pokaż to wydarzenie w kalendarzu miesięcznym",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = showInMonthView,
+                                onCheckedChange = { showInMonthView = it }
+                            )
+                        }
                     }
                 }
 
@@ -311,7 +370,7 @@ fun AddCustomEventDialog(
                             if (end.isBefore(start)) startDate else endDate
                         } else null
 
-                        onConfirm(  // ✅ POPRAWKA: Usuń wcięcie
+                        onConfirm(
                             CustomEvent(
                                 title = title,
                                 description = description,
@@ -325,7 +384,8 @@ fun AddCustomEventDialog(
                                     reminderValue * reminderUnit.multiplier
                                 } else {
                                     0
-                                }
+                                },
+                                showInMonthView = showInMonthView  // ✅ DODAJ TO
                             )
                         )
                     }

@@ -33,7 +33,6 @@ data class Task(
     val priority: TaskPriority = TaskPriority.MEDIUM,
     val hasReminder: Boolean = false,
     val reminderMinutesBefore: Int = 60,
-    // ✅ DOMYŚLNA WARTOŚĆ zamiast nullable - naprawia stare zadania
     val reminderType: ReminderType = ReminderType.MINUTES_BEFORE,
     val reminderCustomTime: String? = null,
     val reminderCustomDays: Int? = null,

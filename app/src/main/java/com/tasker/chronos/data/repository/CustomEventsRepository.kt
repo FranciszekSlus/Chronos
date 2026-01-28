@@ -1,4 +1,3 @@
-// Plik: data/repository/CustomEventsRepository.kt - WERSJA DIAGNOSTYCZNA
 package com.tasker.chronos.data.repository
 
 import android.content.Context
@@ -21,9 +20,6 @@ class CustomEventsRepository(private val context: Context) {
     private val gson = Gson()
     private val eventListType = object : TypeToken<List<CustomEvent>>() {}.type
 
-    /**
-     * Pobiera wszystkie własne wydarzenia
-     */
     fun getAllCustomEvents(): Flow<List<CustomEvent>> {
         return context.customEventsDataStore.data.map { preferences ->
             val jsonString = preferences[EVENTS_KEY]
@@ -38,9 +34,6 @@ class CustomEventsRepository(private val context: Context) {
         }
     }
 
-    /**
-     * Dodaje nowe wydarzenie
-     */
     suspend fun addEvent(event: CustomEvent) {
         context.customEventsDataStore.edit { preferences ->
             val jsonString = preferences[EVENTS_KEY]
@@ -52,7 +45,8 @@ class CustomEventsRepository(private val context: Context) {
 
             android.util.Log.d("CustomEventsRepo", "➕ Dodaję wydarzenie: ${event.title}")
             android.util.Log.d("CustomEventsRepo", "   ID: ${event.id}")
-            android.util.Log.d("CustomEventsRepo", "   Czas: ${event.startTime} - ${event.endTime}")
+            android.util.Log.d("CustomEventsRepo", "   sourceGoalId: ${event.sourceGoalId}")  // ✅ DODAJ LOG
+            android.util.Log.d("CustomEventsRepo", "   sourceMiniGoalId: ${event.sourceMiniGoalId}")  // ✅ DODAJ LOG
 
             currentEvents.add(event)
             preferences[EVENTS_KEY] = gson.toJson(currentEvents)
@@ -61,69 +55,46 @@ class CustomEventsRepository(private val context: Context) {
         }
     }
 
-    /**
-     * Aktualizuje wydarzenie
-     */
     suspend fun updateEvent(event: CustomEvent) {
-        context.customEventsDataStore.edit { preferences ->
-            val jsonString = preferences[EVENTS_KEY]
-            if (jsonString.isNullOrBlank()) {
-                android.util.Log.e("CustomEventsRepo", "❌ Brak wydarzeń do aktualizacji!")
-                return@edit
-            }
-
-            val currentEvents: MutableList<CustomEvent> = gson.fromJson(jsonString, eventListType)
-            val index = currentEvents.indexOfFirst { it.id == event.id }
-
-            android.util.Log.d("CustomEventsRepo", "════════════════════════════════")
-            android.util.Log.d("CustomEventsRepo", "🔄 Aktualizacja wydarzenia")
-            android.util.Log.d("CustomEventsRepo", "   ID: ${event.id}")
-            android.util.Log.d("CustomEventsRepo", "   Znaleziono na indeksie: $index")
-
-            if (index != -1) {
-                val oldEvent = currentEvents[index]
-                android.util.Log.d("CustomEventsRepo", "   PRZED: ${oldEvent.startTime} - ${oldEvent.endTime}")
-                android.util.Log.d("CustomEventsRepo", "   PO: ${event.startTime} - ${event.endTime}")
-
-                currentEvents[index] = event
-                preferences[EVENTS_KEY] = gson.toJson(currentEvents)
-
-                android.util.Log.d("CustomEventsRepo", "✅ Zaktualizowano pomyślnie")
-            } else {
-                android.util.Log.e("CustomEventsRepo", "❌ NIE ZNALEZIONO wydarzenia o ID: ${event.id}")
-                android.util.Log.e("CustomEventsRepo", "   Dostępne ID:")
-                currentEvents.forEach {
-                    android.util.Log.e("CustomEventsRepo", "     - ${it.id} (${it.title})")
-                }
-            }
-            android.util.Log.d("CustomEventsRepo", "════════════════════════════════")
-        }
-    }
-
-    /**
-     * Usuwa wydarzenie
-     */
-    suspend fun deleteEvent(eventId: String) {
         context.customEventsDataStore.edit { preferences ->
             val jsonString = preferences[EVENTS_KEY]
             if (jsonString.isNullOrBlank()) return@edit
 
             val currentEvents: MutableList<CustomEvent> = gson.fromJson(jsonString, eventListType)
-            val wasRemoved = currentEvents.removeAll { it.id == eventId }
-            if (wasRemoved) {
+            val index = currentEvents.indexOfFirst { it.id == event.id }
+
+            if (index != -1) {
+                currentEvents[index] = event
                 preferences[EVENTS_KEY] = gson.toJson(currentEvents)
-                android.util.Log.d("CustomEventsRepo", "🗑️ Usunięto wydarzenie: $eventId")
+                android.util.Log.d("CustomEventsRepo", "✅ Zaktualizowano: ${event.title}")
             }
         }
     }
 
-    /**
-     * Pobiera wydarzenia dla konkretnej daty
-     */
+    suspend fun deleteEvent(eventId: String) {
+        android.util.Log.d("CustomEventsRepo", "🗑️ Usuwam wydarzenie: $eventId")
+
+        context.customEventsDataStore.edit { preferences ->
+            val jsonString = preferences[EVENTS_KEY]
+            if (jsonString.isNullOrBlank()) {
+                android.util.Log.w("CustomEventsRepo", "⚠️ Brak wydarzeń do usunięcia")
+                return@edit
+            }
+
+            val currentEvents: MutableList<CustomEvent> = gson.fromJson(jsonString, eventListType)
+            val sizeBefore = currentEvents.size
+
+            currentEvents.removeAll { it.id == eventId }
+
+            preferences[EVENTS_KEY] = gson.toJson(currentEvents)
+
+            android.util.Log.d("CustomEventsRepo", "✅ Usunięto (było: $sizeBefore, jest: ${currentEvents.size})")
+        }
+    }
+
     fun getEventsForDate(date: String): Flow<List<CustomEvent>> {
         return getAllCustomEvents().map { events ->
-            events.filter { it.date == date }
-                .sortedBy { it.startTime }
+            events.filter { it.date == date }.sortedBy { it.startTime }
         }
     }
 }

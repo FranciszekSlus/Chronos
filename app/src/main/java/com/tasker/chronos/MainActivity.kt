@@ -23,6 +23,7 @@ import androidx.navigation.compose.rememberNavController
 import com.tasker.chronos.navigation.ChronosNavigation
 import com.tasker.chronos.ui.screens.StartScreen
 import com.tasker.chronos.ui.screens.CalendarScreen
+import com.tasker.chronos.ui.screens.LoadingScreen
 import com.tasker.chronos.ui.screens.SettingsScreen
 import com.tasker.chronos.ui.theme.ChronosTheme
 import com.tasker.chronos.workers.HabitResetWorker
@@ -39,6 +40,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // MainActivity.kt - ZNAJDŹ TĘ SEKCJĘ:
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -49,8 +52,24 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             ChronosTheme {
-                // ✅ Używamy Twojej gotowej nawigacji
-                ChronosNavigation()
+                // ✅ NOWE: Splash screen z prawdziwym ładowaniem
+                var isAppReady by remember { mutableStateOf(false) }
+
+                // ✅ Sprawdź czy aplikacja jest gotowa
+                LaunchedEffect(Unit) {
+                    // Tutaj możesz dodać rzeczywiste ładowanie danych
+                    // np. inicjalizacja ViewModeli, ładowanie z plików, itp.
+                    kotlinx.coroutines.delay(1500) // Minimum 1.5s dla płynności animacji
+                    isAppReady = true
+                }
+
+                if (isAppReady) {
+                    // ✅ Aplikacja gotowa - pokaż nawigację
+                    ChronosNavigation()
+                } else {
+                    // ✅ Ładowanie - pokaż splash screen
+                    LoadingScreen()
+                }
             }
         }
     }

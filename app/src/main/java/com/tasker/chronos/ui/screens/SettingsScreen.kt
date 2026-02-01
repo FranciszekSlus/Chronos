@@ -119,7 +119,8 @@ fun SettingsScreen(
             SettingsItem(
                 icon = Icons.Default.Info,
                 title = "O aplikacji",
-                subtitle = "Chronos v1.0.0"
+                subtitle = "Chronos 0.1 v @elozelocompany 01.02.202"
+
             )
 
             Spacer(modifier = Modifier.height(32.dp))

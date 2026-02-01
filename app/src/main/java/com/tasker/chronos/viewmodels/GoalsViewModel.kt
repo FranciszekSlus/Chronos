@@ -87,7 +87,6 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun toggleGoalCompleted(goalId: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            // ✅ POPRAWKA: Pobierz aktualny stan z Repository
             val allGoalsList = repository.getAllGoals().first()
             val goal = allGoalsList.find { it.id == goalId }
 
@@ -98,6 +97,9 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
 
             // Tylko dla celów bez mini-celów
             if (goal.miniGoals.isEmpty()) {
+                // ✅ ZAPISZ STAN PRZED
+                val wasPreviouslyIncomplete = !goal.isCompleted()
+
                 val isNowCompleted = !goal.isCompleted()
                 val updatedGoal = goal.copy(
                     miniGoals = listOf(
@@ -112,6 +114,13 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
                 )
 
                 repository.updateGoal(updatedGoal)
+
+                // ✅ WYWOŁAJ EVENT jeśli cel został TERAZ ukończony
+                if (wasPreviouslyIncomplete && isNowCompleted) {
+                    android.util.Log.d("GoalsViewModel", "🎉 Cel bez mini-celów ukończony! Wywołuję event")
+                    _goalCompletedEvent.emit(updatedGoal.title)
+                }
+
                 android.util.Log.d(
                     "GoalsViewModel",
                     if (isNowCompleted) "✅ Ukończono cel: ${goal.title}"

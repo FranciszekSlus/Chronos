@@ -53,7 +53,10 @@ class HabitResetWorker(
                     workRequest
                 )
 
-            android.util.Log.d("HabitResetWorker", "✅ Zaplanowano reset o północy (za ${initialDelay}min)")
+            android.util.Log.d(
+                "HabitResetWorker",
+                "✅ Zaplanowano reset o północy (za ${initialDelay}min)"
+            )
         }
     }
 
@@ -78,24 +81,36 @@ class HabitResetWorker(
                 if (wasActiveYesterday) {
                     val wasCompletedYesterday = habit.completionDates.contains(yesterday.toString())
 
-                    // Oblicz nowy streak
+                    // ✅ NOWA LOGIKA: NIE zmieniaj streak - tylko resetuj jeśli nie zaznaczono
                     val newStreak = if (wasCompletedYesterday) {
-                        habit.streak + 1
+                        habit.streak  // ✅ Zachowaj obecny streak (był zaznaczony)
                     } else {
-                        0 // Reset streak jeśli nie ukończono
+                        0  // ❌ Reset - nie zaznaczono wczoraj
                     }
 
-                    // Zaktualizuj nawyk
-                    val updatedHabit = habit.copy(
-                        streak = newStreak,
-                        lastCompletionDate = if (wasCompletedYesterday) yesterday.toString() else habit.lastCompletionDate
-                    )
+                    // ✅ Zaktualizuj TYLKO jeśli streak się zmienił
+                    if (newStreak != habit.streak) {
+                        val updatedHabit = habit.copy(
+                            streak = newStreak,
+                            lastCompletionDate = if (wasCompletedYesterday) yesterday.toString() else habit.lastCompletionDate
+                        )
 
-                    repository.updateHabit(updatedHabit)
+                        repository.updateHabit(updatedHabit)
 
+                        android.util.Log.d(
+                            "HabitResetWorker",
+                            "🔄 ${habit.name}: streak ${habit.streak} → $newStreak (wczoraj ${if (wasCompletedYesterday) "✅" else "❌"})"
+                        )
+                    } else {
+                        android.util.Log.d(
+                            "HabitResetWorker",
+                            "✅ ${habit.name}: streak = ${habit.streak} (bez zmian)"
+                        )
+                    }
+                } else {
                     android.util.Log.d(
                         "HabitResetWorker",
-                        "✅ ${habit.name}: streak = $newStreak (completed: $wasCompletedYesterday)"
+                        "⏭️ ${habit.name}: wczoraj nieaktywny, pomijam"
                     )
                 }
             }

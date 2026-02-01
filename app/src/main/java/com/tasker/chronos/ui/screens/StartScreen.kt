@@ -323,11 +323,11 @@ fun StartScreen(
                     initialExpandedGoalId = initialGoalId,
                     onGoalClick = { goal ->
                         android.util.Log.d("StartScreen", "🎯 Clicked goal: ${goal.title}")
-                        selectedGoal = goal  // ✅ POPRAWKA: Ustaw selectedGoal
+                        selectedGoal = goal
                     },
-                    onGoalCompleted = { message ->
-                        // ✅ UŻYJ PRZEKAZANEJ WIADOMOŚCI:
-                        completionMessage = message
+                    // ✅ DODAJ CALLBACK:
+                    onGoalCompleted = { goalTitle ->
+                        completionMessage = "🎉 Cel '$goalTitle' został ukończony w 100%!\n📦 Przeniesiono do archiwum"
                         completionType = CompletionType.GOAL
                         showCompletionToast = true
                     }
@@ -624,12 +624,29 @@ fun GoalsTab(
                         },
                         onToggleGoalCompleted = { goalId ->
                             android.util.Log.d("GoalsTab", "✅ toggleGoalCompleted: $goalId")
-                            viewModel.toggleGoalCompleted(goalId)
+
+                            // ✅ DODAJ SPRAWDZENIE:
+                            val goalToToggle = goals.find { it.id == goalId }
+                            if (goalToToggle != null) {
+                                val wasIncomplete = !goalToToggle.isCompleted()
+                                viewModel.toggleGoalCompleted(goalId)
+
+                                // ✅ PoToggleGoalCompleted sprawdź czy ukończony
+                                if (wasIncomplete) {
+                                    // Pobierz zaktualizowany cel z ViewModelu
+                                    kotlinx.coroutines.GlobalScope.launch {
+                                        kotlinx.coroutines.delay(100) // Poczekaj na aktualizację
+                                        val updatedGoal = viewModel.allGoals.value.find { it.id == goalId }
+                                        if (updatedGoal != null && updatedGoal.isCompleted()) {
+                                            onGoalCompleted(updatedGoal.title)
+                                        }
+                                    }
+                                }
+                            }
                         },
                         onToggleMiniGoal = { miniGoalId ->
                             android.util.Log.d("GoalsTab", "🔘 toggleMiniGoal: $miniGoalId w celu: ${goal.id}")
                             viewModel.toggleMiniGoalCompleted(goal.id, miniGoalId)
-                            // ✅ USUŃ wszelkie wywołania onGoalClick(goal) stąd!
                         },
                         isExpanded = expandedGoalId == goal.id,
                         onExpandToggle = {

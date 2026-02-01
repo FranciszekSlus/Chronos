@@ -328,17 +328,26 @@ fun EditGoalSheet(
                         Text("Anuluj", fontSize = 16.sp)
                     }
 
+                    // ✅ ZNAJDŹ TEN BLOK (około linii 330):
                     Button(
                         onClick = {
                             if (title.isNotBlank()) {
-                                onSave(
-                                    goal.copy(
-                                        title = title,
-                                        description = description,
-                                        endDate = endDate,
-                                        notes = notes
-                                    )
+                                // ✅ DODAJ SPRAWDZENIE PRZED onSave:
+                                val wasPreviouslyIncomplete = !goal.isCompleted()
+                                val updatedGoal = goal.copy(
+                                    title = title,
+                                    description = description,
+                                    endDate = endDate,
+                                    notes = notes
                                 )
+                                val isNowComplete = updatedGoal.isCompleted()
+
+                                // ✅ WYWOŁAJ TOAST jeśli cel właśnie ukończony
+                                if (wasPreviouslyIncomplete && isNowComplete) {
+                                    onGoalCompleted(updatedGoal.title)
+                                }
+
+                                onSave(updatedGoal)
                             }
                         },
                         modifier = Modifier.weight(1f).height(56.dp),
@@ -492,7 +501,7 @@ fun AnimatedProgressBar(progress: Float) {
 fun AnimatedMiniGoalItem(
     miniGoal: MiniGoal,
     goal: Goal,
-    onToggle: () -> Unit,  // ✅ Jeden callback dla wszystkich
+    onToggle: () -> Unit,
     onDelete: () -> Unit,
     onUpdateMiniGoal: (MiniGoal) -> Unit
 ) {
@@ -504,7 +513,6 @@ fun AnimatedMiniGoalItem(
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
     )
 
-    // ✅ PROSTA LOGIKA - sprawdź isCompleted
     val isChecked = miniGoal.isCompleted
 
     Surface(
@@ -529,14 +537,14 @@ fun AnimatedMiniGoalItem(
                 checked = isChecked,
                 onCheckedChange = {
                     isPressed = true
-                    onToggle()  // ✅ Jeden callback
+                    onToggle()
                 },
                 colors = CheckboxDefaults.colors(
                     checkedColor = Color(0xFF4CAF50)
                 )
             )
 
-            // Tytuł i data
+            // ✅ TYLKO JEDEN COLUMN
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -546,61 +554,34 @@ fun AnimatedMiniGoalItem(
                     text = miniGoal.title,
                     style = if (isChecked) {
                         MaterialTheme.typography.bodyMedium.copy(
-                            textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough
                         )
                     } else {
                         MaterialTheme.typography.bodyMedium
                     }
                 )
 
-                // ✅ Pokaż datę LUB info "Bez daty"
-                if (miniGoal.date != null) {
-                    TextButton(
-                        onClick = { showMiniGoalDatePicker = true },
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.CalendarToday,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = formatDate(miniGoal.date),
-                            fontSize = 12.sp
-                        )
-                    }
-                } else {
-                    // ✅ Mini-cel BEZ daty - pokaż info + przycisk dodania daty
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.CalendarToday,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                        )
-                        Text(
-                            text = "Bez daty (można dodawać codziennie)",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        )
-
-                        // Przycisk dodania daty
-                        IconButton(
-                            onClick = { showMiniGoalDatePicker = true },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Add,
-                                contentDescription = "Dodaj datę",
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
+                // ✅ PRZYCISK DATY
+                TextButton(
+                    onClick = { showMiniGoalDatePicker = true },
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Icon(
+                        Icons.Default.CalendarToday,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = miniGoal.date?.let {
+                            try {
+                                formatDate(it)
+                            } catch (e: Exception) {
+                                "Dodaj datę"
+                            }
+                        } ?: "Dodaj datę",
+                        fontSize = 12.sp
+                    )
                 }
             }
 
@@ -618,6 +599,65 @@ fun AnimatedMiniGoalItem(
             }
         }
     }
+
+    LaunchedEffect(isPressed) {
+        if (isPressed) {
+            delay(100)
+            isPressed = false
+        }
+    }
+
+    // ✅ DATEPICKER
+    if (showMiniGoalDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = miniGoal.date?.let {
+                try {
+                    LocalDate.parse(it).toEpochDay() * 24 * 60 * 60 * 1000
+                } catch (e: Exception) {
+                    System.currentTimeMillis()
+                }
+            } ?: System.currentTimeMillis()
+        )
+
+        DatePickerDialog(
+            onDismissRequest = { showMiniGoalDatePicker = false },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Przycisk usuń datę (jeśli jest data)
+                    if (miniGoal.date != null) {
+                        TextButton(
+                            onClick = {
+                                onUpdateMiniGoal(miniGoal.copy(date = null))
+                                showMiniGoalDatePicker = false
+                            }
+                        ) {
+                            Text("Usuń datę")
+                        }
+                    }
+
+                    TextButton(
+                        onClick = {
+                            datePickerState.selectedDateMillis?.let { millis ->
+                                val newDate = LocalDate.ofEpochDay(millis / (24 * 60 * 60 * 1000)).toString()
+                                onUpdateMiniGoal(miniGoal.copy(date = newDate))
+                            }
+                            showMiniGoalDatePicker = false
+                        }
+                    ) {
+                        Text("OK")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMiniGoalDatePicker = false }) {
+                    Text("Anuluj")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
 
     LaunchedEffect(isPressed) {
         if (isPressed) {
@@ -699,6 +739,34 @@ fun AnimatedMiniGoalItem(
         ) {
             DatePicker(state = datePickerState)
         }
+    }
+
+}
+private fun formatDate(dateString: String?): String {
+    if (dateString == null) return "Bez daty"
+
+    return try {
+        val date = LocalDate.parse(dateString)
+        val today = LocalDate.now()
+        val tomorrow = today.plusDays(1)
+        val yesterday = today.minusDays(1)
+
+        when (date) {
+            today -> "Dzisiaj"
+            tomorrow -> "Jutro"
+            yesterday -> "Wczoraj"
+            else -> {
+                // Format: "15 sty" lub "15 sty 2025" jeśli inny rok
+                val formatter = if (date.year == today.year) {
+                    java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale("pl"))
+                } else {
+                    java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale("pl"))
+                }
+                date.format(formatter)
+            }
+        }
+    } catch (e: Exception) {
+        dateString
     }
 }
 

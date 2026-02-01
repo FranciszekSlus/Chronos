@@ -53,8 +53,8 @@ fun EditCustomEventDialog(
     var showStartTimePicker by remember { mutableStateOf(false) }
     var showEndTimePicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    var showInMonthView by remember { mutableStateOf(event.showInMonthView) }
     var reminderValue by remember { mutableStateOf(15) }
+    var showInMonthView by remember { mutableStateOf(event.showInMonthView) }
 
 
     AlertDialog(
@@ -210,6 +210,34 @@ fun EditCustomEventDialog(
                             fontWeight = FontWeight.Medium
                         )
                     }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // ✅ ZNAJDŹ I ZMIEŃ showInMonthViewState → showInMonthView
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Widoczny w widoku miesiąca",
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            "Pokaż to wydarzenie w kalendarzu miesięcznym",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = showInMonthView,
+                        onCheckedChange = { showInMonthView = it }
+                    )
                 }
 
                 Divider()

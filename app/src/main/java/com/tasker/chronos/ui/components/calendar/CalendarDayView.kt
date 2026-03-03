@@ -132,11 +132,11 @@
         }
 
 // ✅ 4. Inbox: zadania bez daty LUB z datą ale BEZ godziny
-        val inboxTasksForDay = remember(allTasksForDay) {
-            val allInboxTasks = tasksViewModel.inboxTasks.value
-            val tasksForDayWithoutTime = allTasksForDay.filter { it.time == null }
+        val inboxTasks by tasksViewModel.inboxTasks.collectAsState()
 
-            allInboxTasks + tasksForDayWithoutTime
+        val inboxTasksForDay = remember(allTasksForDay, inboxTasks) {
+            val tasksForDayWithoutTime = allTasksForDay.filter { it.time == null }
+            inboxTasks + tasksForDayWithoutTime
         }
 
         val allHabits by (habitsViewModel?.habits ?: MutableStateFlow(emptyList())).collectAsState()
@@ -639,10 +639,12 @@
                 }
             )
         }
-    
+
         if (showEditDialog && selectedEvent != null) {
+
+            val freshEvent = customEvents.find { it.id == selectedEvent!!.id } ?: selectedEvent!!
             EditCustomEventDialog(
-                event = selectedEvent!!,
+                event = freshEvent,
                 onDismiss = {
                     showEditDialog = false
                     selectedEvent = null
@@ -1024,34 +1026,28 @@
     fun InboxDrawer(
         tasks: List<Task>,
         habits: List<Habit>,
-        miniGoals: List<Pair<Goal, MiniGoal>>,  // ✅ DODAJ
+        miniGoals: List<Pair<Goal, MiniGoal>>,
         onTaskDragStart: (Task, Offset) -> Unit,
         onTaskDrag: (Offset) -> Unit,
         onHabitDragStart: (Habit, Offset) -> Unit,
         onHabitDrag: (Offset) -> Unit,
-        onMiniGoalDragStart: (Goal, MiniGoal, Offset) -> Unit,  // ✅ DODAJ
-        onMiniGoalDrag: (Offset) -> Unit,  // ✅ DODAJ
-        onMiniGoalDragEnd: () -> Unit,  // ✅ DODAJ
+        onMiniGoalDragStart: (Goal, MiniGoal, Offset) -> Unit,
+        onMiniGoalDrag: (Offset) -> Unit,
+        onMiniGoalDragEnd: () -> Unit,
         onTaskDragEnd: () -> Unit,
         onHabitDragEnd: () -> Unit,
         onClose: () -> Unit,
         modifier: Modifier = Modifier
     ) {
-        android.util.Log.d("InboxDrawer", "📋 Inbox - Tasks: ${tasks.size}, Habits: ${habits.size}, MiniGoals: ${miniGoals.size}")
-        miniGoals.forEach { (goal, miniGoal) ->
-            android.util.Log.d("InboxDrawer", "  Mini-cel: ${miniGoal.title} z: ${goal.title}, data: ${miniGoal.date}")
-        }
-        android.util.Log.d("InboxDrawer", "Recomposition - drawer rendered")
+        // ✅ NOWE: Stan rozwinięcia każdej sekcji
+        var tasksExpanded by remember { mutableStateOf(true) }
+        var habitsExpanded by remember { mutableStateOf(true) }
+        var miniGoalsExpanded by remember { mutableStateOf(true) }
 
         Surface(
-                modifier = modifier
-                    .fillMaxHeight()
-                    .width(200.dp)
-                    .onGloballyPositioned { layoutCoordinates ->
-                        val drawerTop = layoutCoordinates.positionInWindow().y
-                        android.util.Log.d("DrawerPosition", "Drawer starts at Y: $drawerTop")
-                    },
-    
+            modifier = modifier
+                .fillMaxHeight()
+                .width(200.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
             tonalElevation = 8.dp,
             shadowElevation = 8.dp
@@ -1060,83 +1056,139 @@
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp) // ✅ ZMNIEJSZONE (było 16dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 item {
                     Text(
                         text = "📋 Inbox",
-                        fontSize = 16.sp, // ✅ ZMNIEJSZONE (było 18sp)
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
-    
+
+                // ✅ SEKCJA ZADANIA - nagłówek klikalny
                 if (tasks.isNotEmpty()) {
                     item {
-                        Text(
-                            text = "Zadania (${tasks.size})",
-                            fontSize = 11.sp, // ✅ ZMNIEJSZONE (było 12sp)
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { tasksExpanded = !tasksExpanded }
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Zadania (${tasks.size})",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Icon(
+                                imageVector = if (tasksExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
 
-                    items(tasks, key = { it.id }) { task ->
-                        DraggableTaskCard(
-                            task = task,
-                            onDragStart = { position -> onTaskDragStart(task, position) },
-                            onDrag = onTaskDrag, // ✅ DODAJ
-                            onDragEnd = onTaskDragEnd
-                        )
+                    if (tasksExpanded) {
+                        items(tasks, key = { it.id }) { task ->
+                            Spacer(modifier = Modifier.height(6.dp))
+                            DraggableTaskCard(
+                                task = task,
+                                onDragStart = { position -> onTaskDragStart(task, position) },
+                                onDrag = onTaskDrag,
+                                onDragEnd = onTaskDragEnd
+                            )
+                        }
+                        item { Spacer(modifier = Modifier.height(4.dp)) }
                     }
-    
-                    item { Spacer(modifier = Modifier.height(8.dp)) }
                 }
-    
+
+                // ✅ SEKCJA NAWYKI - nagłówek klikalny
                 if (habits.isNotEmpty()) {
                     item {
-                        Text(
-                            text = "Nawyki (${habits.size})",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { habitsExpanded = !habitsExpanded }
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Nawyki (${habits.size})",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Icon(
+                                imageVector = if (habitsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
 
-                    items(habits, key = { it.id }) { habit ->
-                        DraggableHabitCard(
-                            habit = habit,
-                            onDragStart = { position -> onHabitDragStart(habit, position) },
-                            onDrag = onHabitDrag, // ✅ DODAJ
-                            onDragEnd = onHabitDragEnd
-                        )
+                    if (habitsExpanded) {
+                        items(habits, key = { it.id }) { habit ->
+                            Spacer(modifier = Modifier.height(6.dp))
+                            DraggableHabitCard(
+                                habit = habit,
+                                onDragStart = { position -> onHabitDragStart(habit, position) },
+                                onDrag = onHabitDrag,
+                                onDragEnd = onHabitDragEnd
+                            )
+                        }
+                        item { Spacer(modifier = Modifier.height(4.dp)) }
                     }
                 }
-                // ✅ NOWA SEKCJA: Mini-cele
+
+                // ✅ SEKCJA MINI-CELE - nagłówek klikalny
                 if (miniGoals.isNotEmpty()) {
-                    item { Spacer(modifier = Modifier.height(8.dp)) }
-
                     item {
-                        Text(
-                            text = "Mini-cele (${miniGoals.size})",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { miniGoalsExpanded = !miniGoalsExpanded }
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Mini-cele (${miniGoals.size})",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Icon(
+                                imageVector = if (miniGoalsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
 
-                    items(miniGoals, key = { (goal, miniGoal) -> miniGoal.id }) { (goal, miniGoal) ->
-                        DraggableMiniGoalCard(
-                            goal = goal,
-                            miniGoal = miniGoal,
-                            onDragStart = { position -> onMiniGoalDragStart(goal, miniGoal, position) },
-                            onDrag = onMiniGoalDrag,
-                            onDragEnd = onMiniGoalDragEnd
-                        )
+                    if (miniGoalsExpanded) {
+                        items(miniGoals, key = { (_, miniGoal) -> miniGoal.id }) { (goal, miniGoal) ->
+                            Spacer(modifier = Modifier.height(6.dp))
+                            DraggableMiniGoalCard(
+                                goal = goal,
+                                miniGoal = miniGoal,
+                                onDragStart = { position -> onMiniGoalDragStart(goal, miniGoal, position) },
+                                onDrag = onMiniGoalDrag,
+                                onDragEnd = onMiniGoalDragEnd
+                            )
+                        }
+                        item { Spacer(modifier = Modifier.height(4.dp)) }
                     }
                 }
 
-                if (tasks.isEmpty() && habits.isEmpty() && miniGoals.isEmpty()) {  // ✅ DODAJ miniGoals
+                if (tasks.isEmpty() && habits.isEmpty() && miniGoals.isEmpty()) {
                     item {
                         Column(
                             modifier = Modifier

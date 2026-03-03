@@ -119,7 +119,7 @@ fun SettingsScreen(
             SettingsItem(
                 icon = Icons.Default.Info,
                 title = "O aplikacji",
-                subtitle = "Chronos 0.1 v @elozelocompany 01.02.202"
+                subtitle = "Chronos 0.2 v @elozelocompany 01.02.2026 (ostatnia modyfikacja 03.03.2026)"
 
             )
 

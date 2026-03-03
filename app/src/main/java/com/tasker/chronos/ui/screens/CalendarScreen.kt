@@ -87,7 +87,6 @@ fun CalendarScreen(
                         eventTypesPerDay = emptyMap(),
                         onDateClick = { date ->
                             eventsViewModel.selectDate(date)
-                            currentView = CalendarViewType.DAY
                         },
                         modifier = Modifier.padding(horizontal = 8.dp),
                         eventsViewModel = eventsViewModel,

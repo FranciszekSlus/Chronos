@@ -114,7 +114,8 @@ fun MonthView(
     val daysInMonth = selectedMonth.lengthOfMonth()
 
     val previousMonth = selectedMonth.minusMonths(1)
-    val daysFromPrevMonth = if (firstDayOfWeek == 7) 0 else firstDayOfWeek
+    // POPRAWNY KOD:
+    val daysFromPrevMonth = if (firstDayOfWeek == 7) 6 else firstDayOfWeek - 1
     val totalCells = 42
 
     val allDays = mutableListOf<LocalDate>()

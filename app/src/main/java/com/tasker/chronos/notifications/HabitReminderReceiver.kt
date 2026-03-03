@@ -130,7 +130,8 @@ class HabitReminderReceiver : BroadcastReceiver() {
                     val triggerTime = nextDateTime.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
 
                     val newIntent = Intent(context, HabitReminderReceiver::class.java).apply {
-                        putExtras(originalIntent.extras ?: return)
+                        val extras = originalIntent.extras ?: return
+                        putExtras(extras)
                     }
 
                     val pendingIntent = PendingIntent.getBroadcast(
@@ -152,8 +153,11 @@ class HabitReminderReceiver : BroadcastReceiver() {
                 // TYGODNIOWY - następny wybrany dzień
                 isWeekly -> {
                     val targetDay = originalIntent.getStringExtra("target_day") ?: return
-                    val nextWeek = today.plusWeeks(1)
-                    val nextDateTime = LocalDateTime.of(nextWeek, time)
+                    val extras = originalIntent.extras ?: return
+                    val dayOfWeek = java.time.DayOfWeek.valueOf(targetDay)
+                    // Znajdź następne wystąpienie tego dnia tygodnia (za 7 dni od dzisiaj)
+                    val nextDate = today.plusWeeks(1).with(java.time.temporal.TemporalAdjusters.nextOrSame(dayOfWeek))
+                    val nextDateTime = LocalDateTime.of(nextDate, time)
                     val triggerTime = nextDateTime.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
 
                     val newIntent = Intent(context, HabitReminderReceiver::class.java).apply {
@@ -174,7 +178,7 @@ class HabitReminderReceiver : BroadcastReceiver() {
                         pendingIntent
                     )
 
-                    android.util.Log.d("HabitReminder", "   📅 Tygodniowy - za tydzień: $nextWeek")
+
                 }
 
                 // MIESIĘCZNY - obsłużone w rescheduleMonthlyReminder
@@ -205,7 +209,8 @@ class HabitReminderReceiver : BroadcastReceiver() {
             )
 
             // Użyj tej samej godziny co oryginalne powiadomienie
-            val time = LocalTime.of(9, 0) // Domyślnie, można przekazać przez Intent
+            val reminderTime = originalIntent.getStringExtra("reminder_time") ?: "09:00"
+            val time = try { LocalTime.parse(reminderTime) } catch (e: Exception) { LocalTime.of(9, 0) }
             val nextDateTime = LocalDateTime.of(nextDate, time)
             val triggerTime = nextDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 

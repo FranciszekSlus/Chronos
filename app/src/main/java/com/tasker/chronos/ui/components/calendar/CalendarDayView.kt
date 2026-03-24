@@ -305,15 +305,23 @@
                                 events = customEvents,
                                 selectedDate = selectedDate,
                                 onEventClick = { event ->
-                                    // ✅ Jeśli to zadanie z siatki, otwórz EditTaskSheet
-                                    if (event.sourceTaskId != null && event.id.startsWith("task_")) {
+                                    android.util.Log.d("EventClick", "════════════════════════════════")
+                                    android.util.Log.d("EventClick", "📌 event.id = '${event.id}'")
+                                    android.util.Log.d("EventClick", "📌 event.title = '${event.title}'")
+                                    android.util.Log.d("EventClick", "📌 event.sourceTaskId = '${event.sourceTaskId}'")
+                                    android.util.Log.d("EventClick", "📌 startsWith('task_') = ${event.id.startsWith("task_")}")
+                                    android.util.Log.d("EventClick", "════════════════════════════════")
+
+                                    if (event.id.startsWith("task_") && event.sourceTaskId != null) {
+                                        android.util.Log.d("EventClick", "→ Otwieramy EditTaskSheet")
                                         val originalTask = allTasksForDay.find { it.id == event.sourceTaskId }
+                                            ?: tasksViewModel.allTasks.value.find { it.id == event.sourceTaskId }
                                         if (originalTask != null) {
                                             selectedTask = originalTask
                                             showEditTaskSheet = true
                                         }
                                     } else {
-                                        // ✅ Jeśli to prawdziwe wydarzenie, otwórz EditCustomEventDialog
+                                        android.util.Log.d("EventClick", "→ Otwieramy EditCustomEventDialog")
                                         selectedEvent = event
                                         showEditDialog = true
                                     }
@@ -331,10 +339,30 @@
                                 draggedTask = draggedTask,
                                 draggedHabit = draggedHabit,
                                 onDropTask = { task, hour ->
-                                    tasksViewModel?.assignDateToTask(
+                                    val startTime = String.format("%02d:00", hour)
+                                    val endTime = String.format("%02d:00", (hour + 1) % 24)
+
+                                    eventsViewModel.addCustomEvent(
+                                        CustomEvent(
+                                            title = task.title,
+                                            description = task.description,
+                                            date = selectedDate.toString(),
+                                            startTime = startTime,
+                                            endTime = endTime,
+                                            color = when (task.priority) {
+                                                TaskPriority.LOW -> 0xFF4CAF50L
+                                                TaskPriority.MEDIUM -> 0xFFFFC107L
+                                                TaskPriority.HIGH -> 0xFFF44336L
+                                            },
+                                            hasReminder = task.hasReminder,
+                                            reminderMinutesBefore = task.reminderMinutesBefore,
+                                            sourceTaskId = task.id
+                                        )
+                                    )
+                                    tasksViewModel.assignDateToTask(
                                         taskId = task.id,
-                                        date = selectedDate.toString(),
-                                        time = String.format("%02d:00", hour)
+                                        date = null,
+                                        time = null
                                     )
                                     draggedTask = null
                                 },
@@ -405,52 +433,64 @@
                             dragOffset = newPosition
                         },
                         // ✅ NOWY KOD (prawidłowa struktura):
+                        // ✅ POPRAWIONY onMiniGoalDragEnd
                         onMiniGoalDragEnd = {
-                            android.util.Log.d("CalendarView", "🎯 onMiniGoalDragEnd wywołane")
+                            android.util.Log.d("CalendarView", "🎯 onMiniGoalDragEnd wywołane");    if (draggedMiniGoal != null) {
+                            val (goal, miniGoal) = draggedMiniGoal!!
+                            val fingerY = dragOffset.y
+                            val fingerX = dragOffset.x
 
-                            if (draggedMiniGoal != null) {
-                                val (goal, miniGoal) = draggedMiniGoal!!
-                                val fingerY = dragOffset.y
-                                val fingerX = dragOffset.x
+                            val isOverCalendar = fingerX < 1000f && fingerY > 100f
 
-                                val isOverCalendar = fingerX < 1000f && fingerY > 100f
+                            if (!isOverCalendar) {
+                                android.util.Log.d("CalendarView", "MiniGoal dropped outside - returning to inbox")
+                                draggedMiniGoal = null
+                            } else {
+                                // Logika obliczania pozycji musi być TUTAJ (wewnątrz else od isOverCalendar)
+                                val headerHeight = 490f
+                                val cardOffset = with(density) { 120.dp.toPx() }
 
-                                if (!isOverCalendar) {
-                                    android.util.Log.d("CalendarView", "MiniGoal dropped outside - returning to inbox")
-                                    draggedMiniGoal = null
-                                } else {
-                                    // Oblicz pozycję czasową
-                                    val headerHeight = 490f
-                                    val cardOffset = with(density) { 120.dp.toPx() }
-                                    val positionInGrid = (fingerY - headerHeight + cardOffset) + scrollState.value
-                                    val dp = with(density) { positionInGrid.toDp().value }
-                                    val totalMinutes = (dp / 2).toInt().coerceIn(0, 1439)
+                                val positionInGrid = (fingerY - headerHeight + cardOffset) + scrollState.value
+                                val dp = with(density) { positionInGrid.toDp().value }
+                                val totalMinutes = (dp / 2).toInt().coerceIn(0, 1439)
 
-                                    val hours = totalMinutes / 60
-                                    val minutes = totalMinutes % 60
-                                    val roundedMinutes = (minutes / 15) * 15
+                                val hours = totalMinutes / 60
+                                val minutes = totalMinutes % 60
+                                val roundedMinutes = (minutes / 15) * 15
 
-                                    val startTimeText = String.format("%02d:%02d", hours, roundedMinutes)
-                                    val endTimeText = String.format("%02d:%02d", (hours + 1) % 24, roundedMinutes)
+                                val startTime = String.format("%02d:%02d", hours, roundedMinutes)
+                                val endTime = String.format("%02d:%02d", (hours + 1) % 24, roundedMinutes)
 
-                                    android.util.Log.d("CalendarView", "✅ Mini-cel '${miniGoal.title}' zaplanowany na $startTimeText")
-
-                                    // Dodaj wydarzenie
-                                    eventsViewModel.addCustomEvent(
-                                        CustomEvent(
-                                            title = miniGoal.title,
-                                            date = selectedDate.toString(),
-                                            startTime = startTimeText,
-                                            endTime = endTimeText,
-                                            color = 0xFFFF9800L,
-                                            sourceMiniGoalId = miniGoal.id,
-                                            sourceGoalId = goal.id  // ✅ WAŻNE!
-                                        )
-                                    )
-
-                                    draggedMiniGoal = null
+                                // ✅ Twórz CustomEvent na podstawie MINI-CELU (nie taska!)
+                                val colorLong = try {
+                                    android.graphics.Color.parseColor(goal.color.toString()).toLong()
+                                } catch (e: Exception) {
+                                    0xFF2196F3L
                                 }
+
+                                eventsViewModel.addCustomEvent(
+                                    CustomEvent(
+                                        title = miniGoal.title,
+                                        description = "Z celu: ${goal.title}",
+                                        date = selectedDate.toString(),
+                                        startTime = startTime,
+                                        endTime = endTime,
+                                        color = colorLong,
+                                        sourceGoalId = goal.id,
+                                        sourceMiniGoalId = miniGoal.id
+                                    )
+                                )
+
+                                // Usuń datę z mini-celu żeby zniknął z listy do przeciągania
+                                goalsViewModel?.updateMiniGoal(
+                                    goal.id,
+                                    miniGoal.copy(date = null)
+                                )
+
+                                android.util.Log.d("CalendarView", "✅ Mini-cel '${miniGoal.title}' zaplanowany na $startTime")
+                                draggedMiniGoal = null
                             }
+                        }
                         },
                         onTaskDrag = { newPosition ->
                             dragOffset = newPosition // ✅ Aktualizuj podczas przeciągania
@@ -864,8 +904,14 @@
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onTap = {
-                            isSelected = !isSelected
-                            if (!isSelected) onClick()
+                            if (isSelected) {
+                                // Drugie tapnięcie = otwórz dialog
+                                isSelected = false
+                                onClick()
+                            } else {
+                                // Pierwsze tapnięcie = zaznacz (pokaż uchwyty resize)
+                                isSelected = true
+                            }
                         }
                     )
                 },

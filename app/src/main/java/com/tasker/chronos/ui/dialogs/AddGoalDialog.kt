@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.*
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -38,6 +39,7 @@ fun AddGoalDialog(
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var endDate by remember { mutableStateOf<String?>(null) }
+    var notes by remember { mutableStateOf("") } // ✅ DODANE
     var miniGoals by remember { mutableStateOf(listOf<MiniGoal>()) }
     var showDatePicker by remember { mutableStateOf(false) }
     var newMiniGoalTitle by remember { mutableStateOf("") }
@@ -45,7 +47,11 @@ fun AddGoalDialog(
     var showMiniGoalDatePicker by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-
+// ✅ NOWE: Cykliczne przypomnienia
+    var hasPeriodicReminder by remember { mutableStateOf(false) }
+    var reminderIntervalWeeks by remember { mutableStateOf(4) }
+    var reminderTime by remember { mutableStateOf("09:00") }
+    var showReminderTimePicker by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -92,6 +98,7 @@ fun AddGoalDialog(
                     )
                 }
             }
+
 
             // === SCROLLABLE CONTENT ===
             Column(
@@ -316,7 +323,96 @@ fun AddGoalDialog(
                     }
 
                 }
+                GlassSurface {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Note,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text("Notatki", fontWeight = FontWeight.Bold)
+                        }
+
+                        OutlinedTextField(
+                            value = notes,
+                            onValueChange = { notes = it },
+                            placeholder = { Text("Dodaj notatki...") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 4,
+                            maxLines = 8,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(32.dp))
+                // ✅ Cykliczne przypomnienia
+                GlassSurface {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Notifications, contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary)
+                                Text("Cykliczne przypomnienia", fontWeight = FontWeight.Medium)
+                            }
+                            Switch(checked = hasPeriodicReminder, onCheckedChange = { hasPeriodicReminder = it })
+                        }
+
+                        if (hasPeriodicReminder) {
+                            Text("Częstotliwość:", fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                            val intervals = listOf(1 to "1 tydzień", 2 to "2 tygodnie",
+                                4 to "1 miesiąc", 8 to "2 miesiące",
+                                12 to "3 miesiące", 26 to "6 miesięcy")
+
+                            androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                                columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
+                                modifier = Modifier.height(120.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(intervals.size) { i ->
+                                    val (weeks, label) = intervals[i]
+                                    FilterChip(
+                                        selected = reminderIntervalWeeks == weeks,
+                                        onClick = { reminderIntervalWeeks = weeks },
+                                        label = { Text(label, fontSize = 11.sp) }
+                                    )
+                                }
+                            }
+
+                            OutlinedButton(
+                                onClick = { showReminderTimePicker = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Schedule, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Godzina: $reminderTime")
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
             }
+
 
             // === BOTTOM BUTTONS ===
             Surface(
@@ -351,8 +447,11 @@ fun AddGoalDialog(
                                             description = description,
                                             endDate = endDate,
                                             miniGoals = miniGoals,
-                                            notes = "",
-                                            createdAt = java.time.LocalDateTime.now().toString()
+                                            notes = notes, // ✅ Zmieniono z "" na notes
+                                            createdAt = java.time.LocalDateTime.now().toString(),
+                                            hasPeriodicReminder = hasPeriodicReminder,
+                                            reminderIntervalWeeks = reminderIntervalWeeks,
+                                            reminderTime = reminderTime
                                         )
                                     )
                                     onDismiss()

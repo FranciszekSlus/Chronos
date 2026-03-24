@@ -135,4 +135,82 @@ object GoalReminderScheduler {
         cancel(context, goal)
         schedule(context, goal)
     }
+    /**
+     * ✅ NOWE: Zaplanuj cykliczne przypomnienia co X tygodni
+     */
+    fun schedulePeriodicReminder(context: Context, goal: Goal) {
+        if (!goal.hasPeriodicReminder) return
+
+        try {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val today = LocalDate.now()
+
+            // Znajdź następne wystąpienie (za reminderIntervalWeeks tygodni od dziś)
+            val nextDate = today.plusWeeks(goal.reminderIntervalWeeks.toLong())
+
+            // Nie planuj jeśli przekroczymy deadline
+            if (goal.endDate != null) {
+                val endDate = LocalDate.parse(goal.endDate)
+                if (nextDate.isAfter(endDate)) {
+                    android.util.Log.d("GoalReminder", "⏭️ Następne przypomnienie po deadline - pomijam")
+                    return
+                }
+            }
+
+            val timeParts = goal.reminderTime.split(":")
+            val hour = timeParts[0].toInt()
+            val minute = timeParts[1].toInt()
+
+            val calendar = Calendar.getInstance().apply {
+                set(Calendar.YEAR, nextDate.year)
+                set(Calendar.MONTH, nextDate.monthValue - 1)
+                set(Calendar.DAY_OF_MONTH, nextDate.dayOfMonth)
+                set(Calendar.HOUR_OF_DAY, hour)
+                set(Calendar.MINUTE, minute)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+
+            val intent = Intent(context, GoalReminderReceiver::class.java).apply {
+                putExtra("goal_id", goal.id)
+                putExtra("goal_title", goal.title)
+                putExtra("days_before", -1)  // -1 = cykliczne (nie deadline)
+                putExtra("end_date", goal.endDate ?: "")
+                putExtra("progress", goal.getProgressPercentage())
+                putExtra("is_periodic", true)
+                putExtra("interval_weeks", goal.reminderIntervalWeeks)
+                putExtra("reminder_time", goal.reminderTime)
+            }
+
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                "${goal.id}_periodic".hashCode(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            if (calendar.timeInMillis > System.currentTimeMillis()) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    calendar.timeInMillis,
+                    pendingIntent
+                )
+                android.util.Log.d("GoalReminder", "✅ Cykliczne przypomnienie: ${goal.title} za ${goal.reminderIntervalWeeks} tyg ($nextDate)")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("GoalReminder", "❌ Błąd cyklicznego planowania: ${e.message}")
+        }
+    }
+
+    fun cancelPeriodicReminder(context: Context, goal: Goal) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, GoalReminderReceiver::class.java)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            "${goal.id}_periodic".hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarmManager.cancel(pendingIntent)
+    }
 }

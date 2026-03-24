@@ -1,6 +1,8 @@
 // Plik: notifications/GoalReminderReceiver.kt
 package com.tasker.chronos.notifications
 
+import android.annotation.SuppressLint
+import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -10,6 +12,8 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.tasker.chronos.MainActivity
+import java.util.Calendar
+import java.time.LocalDate
 import com.tasker.chronos.R
 
 class GoalReminderReceiver : BroadcastReceiver() {
@@ -23,9 +27,15 @@ class GoalReminderReceiver : BroadcastReceiver() {
         val goalTitle = intent.getStringExtra("goal_title") ?: "Cel"
         val daysBefore = intent.getIntExtra("days_before", 1)
         val progress = intent.getIntExtra("progress", 0)
+        val isPeriodic = intent.getBooleanExtra("is_periodic", false)
+        val intervalWeeks = intent.getIntExtra("interval_weeks", 4)
+        val reminderTime = intent.getStringExtra("reminder_time") ?: "09:00"
 
         createNotificationChannel(context)
         sendNotification(context, goalId, goalTitle, daysBefore, progress)
+        if (isPeriodic) {
+            reschedulePeriodicReminder(context, goalId, goalTitle, intervalWeeks, reminderTime, intent.getStringExtra("end_date"))
+        }
     }
 
     private fun createNotificationChannel(context: Context) {
@@ -42,6 +52,61 @@ class GoalReminderReceiver : BroadcastReceiver() {
 
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    @SuppressLint("ServiceCast")
+    private fun reschedulePeriodicReminder(
+        context: Context,
+        goalId: String,
+        goalTitle: String,
+        intervalWeeks: Int,
+        reminderTime: String,
+        endDate: String?
+    ) {
+        try {
+            val nextDate = LocalDate.now().plusWeeks(intervalWeeks.toLong())
+
+            // Sprawdź deadline
+            if (endDate != null && endDate.isNotBlank()) {
+                if (nextDate.isAfter(LocalDate.parse(endDate))) {
+                    android.util.Log.d("GoalReminder", "⏭️ Reschedule po deadline - koniec")
+                    return
+                }
+            }
+
+            val timeParts = reminderTime.split(":")
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val calendar = Calendar.getInstance().apply {
+                set(Calendar.YEAR, nextDate.year)
+                set(Calendar.MONTH, nextDate.monthValue - 1)
+                set(Calendar.DAY_OF_MONTH, nextDate.dayOfMonth)
+                set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
+                set(Calendar.MINUTE, timeParts[1].toInt())
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+
+            val intent = Intent(context, GoalReminderReceiver::class.java).apply {
+                putExtra("goal_id", goalId)
+                putExtra("goal_title", goalTitle)
+                putExtra("days_before", -1)
+                putExtra("end_date", endDate ?: "")
+                putExtra("progress", 0)
+                putExtra("is_periodic", true)
+                putExtra("interval_weeks", intervalWeeks)
+                putExtra("reminder_time", reminderTime)
+            }
+
+            val pendingIntent = PendingIntent.getBroadcast(
+                context, "${goalId}_periodic".hashCode(), intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
+            android.util.Log.d("GoalReminder", "🔄 Zaplanowano następne cykliczne: $nextDate")
+        } catch (e: Exception) {
+            android.util.Log.e("GoalReminder", "❌ Reschedule błąd: ${e.message}")
         }
     }
 
@@ -100,4 +165,9 @@ class GoalReminderReceiver : BroadcastReceiver() {
 
         android.util.Log.d("GoalReminder", "🔔 Notification sent: $goalTitle ($daysBefore days before)")
     }
+    // ✅ Jeśli cykliczne — zaplanuj następne
+
+
+
+
 }

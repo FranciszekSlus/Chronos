@@ -45,6 +45,10 @@ fun EditGoalSheet(
     var description by remember { mutableStateOf(goal.description) }
     var endDate by remember { mutableStateOf(goal.endDate) }
     var notes by remember { mutableStateOf(goal.notes) }
+    var hasPeriodicReminder by remember { mutableStateOf(goal.hasPeriodicReminder) }
+    var reminderIntervalWeeks by remember { mutableStateOf(goal.reminderIntervalWeeks) }
+    var reminderTime by remember { mutableStateOf(goal.reminderTime) }
+    var showReminderTimePicker by remember { mutableStateOf(false) }
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -312,8 +316,68 @@ fun EditGoalSheet(
                         )
                     }
                 }
-
                 Spacer(modifier = Modifier.height(32.dp))
+                // ✅ Cykliczne przypomnienia
+                GlassSurface {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Notifications, contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary)
+                                Text("Cykliczne przypomnienia", fontWeight = FontWeight.Medium)
+                            }
+                            Switch(checked = hasPeriodicReminder, onCheckedChange = { hasPeriodicReminder = it })
+                        }
+
+                        if (hasPeriodicReminder) {
+                            Text("Częstotliwość:", fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                            val intervals = listOf(1 to "1 tydzień", 2 to "2 tygodnie",
+                                4 to "1 miesiąc", 8 to "2 miesiące",
+                                12 to "3 miesiące", 26 to "6 miesięcy")
+
+                            androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                                columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
+                                modifier = Modifier.height(120.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(intervals.size) { i ->
+                                    val (weeks, label) = intervals[i]
+                                    FilterChip(
+                                        selected = reminderIntervalWeeks == weeks,
+                                        onClick = { reminderIntervalWeeks = weeks },
+                                        label = { Text(label, fontSize = 11.sp) }
+                                    )
+                                }
+                            }
+
+                            OutlinedButton(
+                                onClick = { showReminderTimePicker = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Schedule, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Godzina: $reminderTime")
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+
 
                 // Przyciski akcji
                 Row(
@@ -338,7 +402,10 @@ fun EditGoalSheet(
                                     title = title,
                                     description = description,
                                     endDate = endDate,
-                                    notes = notes
+                                    notes = notes,
+                                    hasPeriodicReminder = hasPeriodicReminder,    // ✅ DODAJ
+                                    reminderIntervalWeeks = reminderIntervalWeeks, // ✅ DODAJ
+                                    reminderTime = reminderTime
                                 )
                                 val isNowComplete = updatedGoal.isCompleted()
 
@@ -466,6 +533,36 @@ fun EditGoalSheet(
                 TextButton(onClick = { showDeleteDialog = false }) {
                     Text("Anuluj")
                 }
+            }
+        )
+    }
+    if (showReminderTimePicker) {
+        var tempHour by remember { mutableStateOf(reminderTime.split(":")[0].toInt()) }
+        var tempMinute by remember { mutableStateOf(reminderTime.split(":")[1].toInt()) }
+
+        AlertDialog(
+            onDismissRequest = { showReminderTimePicker = false },
+            title = { Text("Godzina przypomnienia") },
+            text = {
+                val timePickerState = rememberTimePickerState(
+                    initialHour = tempHour,
+                    initialMinute = tempMinute,
+                    is24Hour = true
+                )
+                LaunchedEffect(timePickerState.hour, timePickerState.minute) {
+                    tempHour = timePickerState.hour
+                    tempMinute = timePickerState.minute
+                }
+                TimePicker(state = timePickerState)
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    reminderTime = String.format("%02d:%02d", tempHour, tempMinute)
+                    showReminderTimePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReminderTimePicker = false }) { Text("Anuluj") }
             }
         )
     }
@@ -768,5 +865,6 @@ private fun formatDate(dateString: String?): String {
     } catch (e: Exception) {
         dateString
     }
+
 }
 

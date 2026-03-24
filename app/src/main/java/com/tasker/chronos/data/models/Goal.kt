@@ -36,7 +36,11 @@ data class Goal(
     val miniGoals: List<MiniGoal> = emptyList(),
     val notes: String = "",
     val createdAt: String = java.time.LocalDateTime.now().toString(),
-    val manuallyCompleted: Boolean = false  // ✅ NOWE: Oznacz ręcznie jako ukończony
+    val manuallyCompleted: Boolean = false,
+    // ✅ NOWE: Cykliczne przypomnienia
+    val hasPeriodicReminder: Boolean = false,
+    val reminderIntervalWeeks: Int = 4,  // 1, 2, 4, 8, 12, 26 tygodni
+    val reminderTime: String = "09:00"   // Godzina powiadomienia
 ) {
     /**
      * Oblicza procent wykonania na podstawie ukończonych mini-celów (0.0 - 1.0)

@@ -15,6 +15,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
+import com.tasker.chronos.ui.screens.AchievementsScreen
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -23,6 +24,7 @@ import androidx.navigation.NavType
 import com.tasker.chronos.ui.components.calendar.CalendarDayView
 import com.tasker.chronos.ui.screens.ArchiveScreen
 import com.tasker.chronos.ui.screens.CalendarScreen
+import com.tasker.chronos.ui.screens.DayScheduleScreen
 import com.tasker.chronos.ui.screens.GoalDetailsScreen
 import com.tasker.chronos.ui.screens.NotesScreen
 import com.tasker.chronos.ui.screens.SettingsScreen
@@ -30,6 +32,7 @@ import com.tasker.chronos.ui.screens.ShoppingScreen
 import com.tasker.chronos.ui.screens.StartScreen
 import com.tasker.chronos.ui.screens.StatisticsScreen
 import com.tasker.chronos.viewmodels.CalendarViewModel
+import com.tasker.chronos.viewmodels.DayScheduleViewModel
 import com.tasker.chronos.viewmodels.EventsViewModel
 import com.tasker.chronos.viewmodels.GoalsViewModel
 import com.tasker.chronos.viewmodels.HabitsViewModel
@@ -55,9 +58,10 @@ fun ChronosNavigation(
     userProfileViewModel: UserProfileViewModel = viewModel(),
     settingsViewModel: SettingsViewModel = viewModel(),
     notesViewModel: NotesViewModel = viewModel(),  // ✅ NOWY
-    shoppingViewModel: ShoppingViewModel = viewModel()
+    shoppingViewModel: ShoppingViewModel = viewModel(),
+    dayScheduleViewModel: DayScheduleViewModel = viewModel(),
 
-) {
+    ) {
     val navController = rememberNavController()
     val items = listOf(Screen.Home, Screen.Calendar, Screen.Settings)
 
@@ -178,6 +182,9 @@ fun ChronosNavigation(
                             }
                             launchSingleTop = true
                         }
+                    },
+                    onNavigateToSchedules = { date ->  // ✅ DODAJ
+                        navController.navigate("day_schedules/$date")
                     }
                 )
             }
@@ -195,6 +202,9 @@ fun ChronosNavigation(
                     },
                     onNavigateToStatistics = {
                         navController.navigate("statistics")
+                    },
+                            onNavigateToAchievements = {
+                        navController.navigate("achievements")
                     }
                 )
             }
@@ -236,6 +246,24 @@ fun ChronosNavigation(
                     onNavigateBack = {
                         navController.popBackStack()
                     }
+                )
+            }
+            composable("achievements") {
+                AchievementsScreen(
+                    userProfileViewModel = userProfileViewModel,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(
+                route = "day_schedules/{date}",
+                arguments = listOf(navArgument("date") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val date = backStackEntry.arguments?.getString("date") ?: ""
+                DayScheduleScreen(
+                    dayScheduleViewModel = dayScheduleViewModel,
+                    eventsViewModel = eventsViewModel,
+                    selectedDate = date,
+                    onBack = { navController.popBackStack() }
                 )
             }
         }

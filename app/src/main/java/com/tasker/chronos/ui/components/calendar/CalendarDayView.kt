@@ -75,7 +75,8 @@
         habitsViewModel: HabitsViewModel? = null,
         goalsViewModel: GoalsViewModel? = null,
         onNavigateToGoal: (String) -> Unit = {},
-        onGoalDialogDismissed: () -> Unit = {}
+        onGoalDialogDismissed: () -> Unit = {},
+        onNavigateToSchedules: () -> Unit = {}
 
     ) {
 
@@ -91,44 +92,13 @@
             .filter { it.date == dateString && !it.isCompleted }
 
 // ✅ 2. Konwertuj zadania Z godziną na CustomEvent
-        val taskEventsOnGrid = remember(allTasksForDay) {
-            allTasksForDay
-                .filter { it.time != null }
-                .map { task ->
-                    val startParts = task.time!!.split(":")
-                    val startHour = startParts[0].toInt()
-                    val startMinute = startParts[1].toInt()
 
-                    val endHour = (startHour + 1) % 24
-                    val endMinute = startMinute
-
-                    CustomEvent(
-                        id = "task_${task.id}",
-                        title = task.title,
-                        description = task.description,
-                        date = dateString,
-                        startTime = String.format("%02d:%02d", startHour, startMinute),
-                        endTime = String.format("%02d:%02d", endHour, endMinute),
-                        color = when (task.priority) {
-                            TaskPriority.LOW -> 0xFF4CAF50L
-                            TaskPriority.MEDIUM -> 0xFFFFC107L
-                            TaskPriority.HIGH -> 0xFFF44336L
-                        },
-                        hasReminder = task.hasReminder,
-                        reminderMinutesBefore = task.reminderMinutesBefore,
-                        sourceTaskId = task.id,
-                        showInMonthView = false
-                    )
-                }
-        }
 
 // ✅ 3. Połącz prawdziwe wydarzenia + zadania z godziną
-        val customEvents = remember(allCustomEvents, taskEventsOnGrid, selectedDate) {
-            val realEvents = allCustomEvents.filter { event ->
-                event.occursOnDate(selectedDate.toString()) &&
-                        event.sourceTaskId == null
+        val customEvents = remember(allCustomEvents, selectedDate) {
+            allCustomEvents.filter { event ->
+                event.occursOnDate(selectedDate.toString())
             }
-            realEvents + taskEventsOnGrid
         }
 
 // ✅ 4. Inbox: zadania bez daty LUB z datą ale BEZ godziny
@@ -211,6 +181,16 @@
                                 )
                             )
                         )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // ✅ NOWY przycisk schematów
+                            IconButton(onClick = { onNavigateToSchedules() }) {
+                                Icon(
+                                    imageVector = Icons.Default.ViewDay,
+                                    contentDescription = "Schematy dnia",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
 
                         // ✅ NOWY KOD (wklej):
                         BadgedBox(
@@ -359,11 +339,8 @@
                                             sourceTaskId = task.id
                                         )
                                     )
-                                    tasksViewModel.assignDateToTask(
-                                        taskId = task.id,
-                                        date = null,
-                                        time = null
-                                    )
+                                    // Usuń zadanie z inboxu - oznacz jako zaplanowane przez CustomEvent
+
                                     draggedTask = null
                                 },
                                 onDropHabit = { habit, hour ->
@@ -528,15 +505,29 @@
                                     val roundedMinutes = (minutes / 15) * 15
 
                                     val startTime = String.format("%02d:%02d", hours, roundedMinutes)
+                                    val endTime = String.format("%02d:%02d", (hours + 1) % 24, roundedMinutes)
 
-                                    // ✅ ZMIANA: Tylko zaktualizuj zadanie, NIE twórz CustomEvent
-                                    tasksViewModel?.assignDateToTask(
-                                        taskId = draggedTask!!.id,
-                                        date = selectedDate.toString(),
-                                        time = startTime  // ✅ Przypisz godzinę do zadania
+                                    val taskToConvert = draggedTask!!
+                                    eventsViewModel.addCustomEvent(
+                                        CustomEvent(
+                                            title = taskToConvert.title,
+                                            description = taskToConvert.description,
+                                            date = selectedDate.toString(),
+                                            startTime = startTime,
+                                            endTime = endTime,
+                                            color = when (taskToConvert.priority) {
+                                                TaskPriority.LOW -> 0xFF4CAF50L
+                                                TaskPriority.MEDIUM -> 0xFFFFC107L
+                                                TaskPriority.HIGH -> 0xFFF44336L
+                                            },
+                                            hasReminder = taskToConvert.hasReminder,
+                                            reminderMinutesBefore = taskToConvert.reminderMinutesBefore,
+                                            sourceTaskId = taskToConvert.id
+                                        )
                                     )
+                                    tasksViewModel.deleteTask(taskToConvert)  // ← usuń zadanie jak nawyk/mini-cel
 
-                                    android.util.Log.d("CalendarView", "✅ Zadanie '${draggedTask!!.title}' zaplanowane na $startTime")
+                                    android.util.Log.d("CalendarView", "✅ Zadanie '${taskToConvert.title}' zamienione na CustomEvent o $startTime")
                                     draggedTask = null
                                 }
                             }

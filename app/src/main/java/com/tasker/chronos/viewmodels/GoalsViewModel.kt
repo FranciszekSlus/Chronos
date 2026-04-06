@@ -52,6 +52,10 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.addGoal(goal)
             GoalReminderScheduler.schedule(getApplication(), goal)
+            // ✅ NOWE: Cykliczne przypomnienia
+            if (goal.hasPeriodicReminder) {
+                GoalReminderScheduler.schedulePeriodicReminder(getApplication(), goal)
+            }
             android.util.Log.d("GoalsViewModel", "✅ Dodano cel: ${goal.title}")
         }
     }
@@ -60,9 +64,13 @@ class GoalsViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.updateGoal(goal)
             GoalReminderScheduler.reschedule(getApplication(), goal)
+            // ✅ NOWE: Zaktualizuj cykliczne przypomnienia
+            GoalReminderScheduler.cancelPeriodicReminder(getApplication(), goal)
+            if (goal.hasPeriodicReminder) {
+                GoalReminderScheduler.schedulePeriodicReminder(getApplication(), goal)
+            }
             android.util.Log.d("GoalsViewModel", "✅ Zaktualizowano cel: ${goal.title}")
         }
-
     }
 
     fun deleteGoal(goal: Goal, eventsViewModel: EventsViewModel) {  // ✅ DODAJ parametr

@@ -36,7 +36,8 @@ enum class CalendarViewType {
 fun CalendarScreen(
     calendarViewModel: CalendarViewModel? = null,
     habitsViewModel: HabitsViewModel? = null,
-    onNavigateToGoal: (String) -> Unit // ✅ DODAJ TEN PARAMETR
+    onNavigateToGoal: (String) -> Unit,
+    onNavigateToSchedules: (String) -> Unit = {} // ✅ DODAJ TEN PARAMETR
 ) {
     val eventsViewModel: EventsViewModel = viewModel()
     val goalsViewModel: GoalsViewModel = viewModel()
@@ -109,7 +110,8 @@ fun CalendarScreen(
                         tasksViewModel = tasksViewModel,
                         habitsViewModel = habitsViewModelLocal,
                         goalsViewModel = goalsViewModel,
-                        onNavigateToGoal = onNavigateToGoal // ✅ PRZEKAŻ DALEJ
+                        onNavigateToGoal = onNavigateToGoal,
+                        onNavigateToSchedules = { onNavigateToSchedules(selectedDate.toString()) }  // ✅ DODAJ
                     )
                 }
             }

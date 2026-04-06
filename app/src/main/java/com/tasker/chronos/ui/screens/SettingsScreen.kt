@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tasker.chronos.data.models.Achievements
 import com.tasker.chronos.viewmodels.UserProfileViewModel
 import com.tasker.chronos.viewmodels.SettingsViewModel
 
@@ -27,7 +28,8 @@ fun SettingsScreen(
     settingsViewModel: SettingsViewModel,
     onNavigateToArchive: () -> Unit = {},
     onNavigateToHelp: () -> Unit = {},
-    onNavigateToStatistics: () -> Unit = {}
+    onNavigateToStatistics: () -> Unit = {},
+    onNavigateToAchievements: () -> Unit = {},
 ) {
     val userProfile by userProfileViewModel.userProfile.collectAsState()
     val settings by settingsViewModel.settings.collectAsState()
@@ -102,6 +104,12 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            SettingsItem(
+                icon = Icons.Default.EmojiEvents,
+                title = "Osiągnięcia",
+                subtitle = "${Achievements.getUnlocked(userProfile.totalPoints).size} / ${Achievements.all.size} odblokowanych",
+                onClick = onNavigateToAchievements
+            )
 
 
             Spacer(modifier = Modifier.height(24.dp))

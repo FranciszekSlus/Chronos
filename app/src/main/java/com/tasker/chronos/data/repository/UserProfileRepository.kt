@@ -20,14 +20,7 @@ class UserProfileRepository(private val context: Context) {
     private val TOTAL_POINTS_KEY = intPreferencesKey("total_points")
     private val CREATED_AT_KEY = stringPreferencesKey("created_at")
 
-    fun getUserProfile(): Flow<UserProfile> {
-        return context.userDataStore.data.map { preferences ->
-            UserProfile(
-                totalPoints = preferences[TOTAL_POINTS_KEY] ?: 0,
-                createdAt = preferences[CREATED_AT_KEY] ?: LocalDate.now().toString()
-            )
-        }
-    }
+
 
     suspend fun addPoints(points: Int) {
         context.userDataStore.edit { preferences ->
@@ -44,6 +37,29 @@ class UserProfileRepository(private val context: Context) {
     suspend fun resetPoints() {
         context.userDataStore.edit { preferences ->
             preferences[TOTAL_POINTS_KEY] = 0
+        }
+    }
+    private val UNLOCKED_ACHIEVEMENTS_KEY = stringPreferencesKey("unlocked_achievements")
+
+    fun getUserProfile(): Flow<UserProfile> {
+        return context.userDataStore.data.map { preferences ->
+            UserProfile(
+                totalPoints = preferences[TOTAL_POINTS_KEY] ?: 0,
+                createdAt = preferences[CREATED_AT_KEY] ?: LocalDate.now().toString(),
+                unlockedAchievements = preferences[UNLOCKED_ACHIEVEMENTS_KEY]
+                    ?.split(",")?.filter { it.isNotBlank() } ?: emptyList()  // ✅ NOWE
+            )
+        }
+    }
+
+    suspend fun unlockAchievement(achievementId: String) {
+        context.userDataStore.edit { preferences ->
+            val current = preferences[UNLOCKED_ACHIEVEMENTS_KEY] ?: ""
+            val list = current.split(",").filter { it.isNotBlank() }.toMutableList()
+            if (!list.contains(achievementId)) {
+                list.add(achievementId)
+                preferences[UNLOCKED_ACHIEVEMENTS_KEY] = list.joinToString(",")
+            }
         }
     }
 }

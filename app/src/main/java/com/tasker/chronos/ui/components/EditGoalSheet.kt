@@ -427,6 +427,36 @@ fun EditGoalSheet(
             }
         }
     }
+    if (showReminderTimePicker) {
+        val timePickerState = rememberTimePickerState(
+            initialHour = reminderTime.split(":")[0].toIntOrNull() ?: 9,
+            initialMinute = reminderTime.split(":")[1].toIntOrNull() ?: 0,
+            is24Hour = true
+        )
+
+        AlertDialog(
+            onDismissRequest = { showReminderTimePicker = false },
+            title = { Text("Godzina przypomnienia") },
+            text = {
+                TimePicker(state = timePickerState)
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    reminderTime = String.format(
+                        "%02d:%02d",
+                        timePickerState.hour,
+                        timePickerState.minute
+                    )
+                    showReminderTimePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReminderTimePicker = false }) {
+                    Text("Anuluj")
+                }
+            }
+        )
+    }
 
     // DatePicker
     if (showDatePicker) {

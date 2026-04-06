@@ -129,8 +129,10 @@ class HabitReminderReceiver : BroadcastReceiver() {
                     val nextDateTime = LocalDateTime.of(tomorrow, time)
                     val triggerTime = nextDateTime.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
 
+                    // POPRAWKA - codzienny:
+                    // POPRAWKA - codzienny:
+                    val extras = originalIntent.extras ?: return
                     val newIntent = Intent(context, HabitReminderReceiver::class.java).apply {
-                        val extras = originalIntent.extras ?: return
                         putExtras(extras)
                     }
 
@@ -153,15 +155,18 @@ class HabitReminderReceiver : BroadcastReceiver() {
                 // TYGODNIOWY - następny wybrany dzień
                 isWeekly -> {
                     val targetDay = originalIntent.getStringExtra("target_day") ?: return
-                    val extras = originalIntent.extras ?: return
+
                     val dayOfWeek = java.time.DayOfWeek.valueOf(targetDay)
                     // Znajdź następne wystąpienie tego dnia tygodnia (za 7 dni od dzisiaj)
                     val nextDate = today.plusWeeks(1).with(java.time.temporal.TemporalAdjusters.nextOrSame(dayOfWeek))
                     val nextDateTime = LocalDateTime.of(nextDate, time)
                     val triggerTime = nextDateTime.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
 
+                    // POPRAWKA - tygodniowy:
+                    // POPRAWKA - tygodniowy:
+                    val extras = originalIntent.extras ?: return
                     val newIntent = Intent(context, HabitReminderReceiver::class.java).apply {
-                        putExtras(originalIntent.extras ?: return)
+                        putExtras(extras)
                     }
 
                     val uniqueId = "${habitId}_$targetDay".hashCode()
@@ -217,9 +222,11 @@ class HabitReminderReceiver : BroadcastReceiver() {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             val uniqueId = "${habitId}_day$targetDayOfMonth".hashCode()
 
+            // POPRAWKA - miesięczny (rescheduleMonthlyReminder):
+            // POPRAWKA - miesięczny (rescheduleMonthlyReminder):
+            val extras = originalIntent.extras ?: return
             val newIntent = Intent(context, HabitReminderReceiver::class.java).apply {
-                // Skopiuj wszystkie dane z oryginalnego Intentu
-                putExtras(originalIntent.extras ?: return)
+                putExtras(extras)
             }
 
             val pendingIntent = PendingIntent.getBroadcast(

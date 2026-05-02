@@ -1,6 +1,18 @@
 // Plik: ui/screens/StartScreen.kt (KOMPLETNIE POPRAWIONY)
 package com.tasker.chronos.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.expandIn
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,7 +24,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -23,6 +39,10 @@ import com.tasker.chronos.viewmodels.EventsViewModel
 import com.tasker.chronos.viewmodels.TasksViewModel
 import com.tasker.chronos.viewmodels.HabitsViewModel
 import com.tasker.chronos.viewmodels.GoalsViewModel
+import com.tasker.chronos.ui.theme.ChronosMotion
+import com.tasker.chronos.ui.theme.textWithBlueGlow
+import com.tasker.chronos.ui.theme.textWithGoldGlow
+import com.tasker.chronos.ui.theme.textWithGreenGlow
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,6 +54,8 @@ fun StartScreen(
     eventsViewModel: EventsViewModel = viewModel(),
     initialTab: Int = 0,
     initialGoalId: String? = null,
+    initialTaskId: String? = null,
+    initialHabitId: String? = null,
     onNavigateToNotes: () -> Unit = {},  // ✅ NOWY PARAMETR
     onNavigateToShopping: () -> Unit = {}
 ) {
@@ -66,6 +88,10 @@ fun StartScreen(
     }
     val filteredGoals = remember(activeGoals, goalFilters) {
         activeGoals.applyFilters(goalFilters)
+    }
+
+    LaunchedEffect(initialTab) {
+        selectedTab = initialTab
     }
 
     // ✅ Stan dla dialogów i arkuszy
@@ -104,6 +130,33 @@ fun StartScreen(
             }
         }
     }
+
+    var hasHandledInitialTask by remember { mutableStateOf(false) }
+    LaunchedEffect(initialTaskId, filteredScheduledTasks, filteredInboxTasks) {
+        if (initialTaskId.isNullOrBlank() || hasHandledInitialTask) return@LaunchedEffect
+        selectedTab = 0
+        val task = filteredScheduledTasks.find { it.id == initialTaskId }
+            ?: filteredInboxTasks.find { it.id == initialTaskId }
+        if (task != null) {
+            selectedTask = task
+            showEditTaskSheet = true
+            hasHandledInitialTask = true
+            android.util.Log.d("StartScreen", "✅ Otwarto zadanie z powiadomienia: ${task.title}")
+        }
+    }
+
+    var hasHandledInitialHabit by remember { mutableStateOf(false) }
+    LaunchedEffect(initialHabitId, filteredHabits) {
+        if (initialHabitId.isNullOrBlank() || hasHandledInitialHabit) return@LaunchedEffect
+        selectedTab = 1
+        val habit = filteredHabits.find { it.id == initialHabitId }
+        if (habit != null) {
+            selectedHabit = habit
+            showEditHabitSheet = true
+            hasHandledInitialHabit = true
+            android.util.Log.d("StartScreen", "✅ Otwarto nawyk z powiadomienia: ${habit.name}")
+        }
+    }
     // ✅ DODAJ NOWY LaunchedEffect - tuż PRZED istniejącym LaunchedEffect(initialGoalId)
     LaunchedEffect(Unit) {
         goalsViewModel.goalCompletedEvent.collect { goalTitle ->
@@ -116,6 +169,7 @@ fun StartScreen(
     val tabs = listOf("Zadania", "Nawyki", "Cele")
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
@@ -167,7 +221,7 @@ fun StartScreen(
                             BadgedBox(
                                 badge = {
                                     if (activeFiltersCount > 0) {
-                                        Badge(containerColor = Color(0xFFFF6B35)) {
+                                        Badge(containerColor = MaterialTheme.colorScheme.error) {
                                             Text("$activeFiltersCount")
                                         }
                                     }
@@ -194,7 +248,7 @@ fun StartScreen(
                             BadgedBox(
                                 badge = {
                                     if (activeFiltersCount > 0) {
-                                        Badge(containerColor = Color(0xFFFF6B35)) {
+                                        Badge(containerColor = MaterialTheme.colorScheme.error) {
                                             Text("$activeFiltersCount")
                                         }
                                     }
@@ -220,7 +274,7 @@ fun StartScreen(
                             BadgedBox(
                                 badge = {
                                     if (activeFiltersCount > 0) {
-                                        Badge(containerColor = Color(0xFFFF6B35)) {
+                                        Badge(containerColor = MaterialTheme.colorScheme.error) {
                                             Text("$activeFiltersCount")
                                         }
                                     }
@@ -261,7 +315,13 @@ fun StartScreen(
                 },
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Dodaj")
+                Crossfade(targetState = selectedTab, label = "fab_icon_morph") { tab ->
+                    when (tab) {
+                        1 -> Icon(Icons.Default.Autorenew, contentDescription = "Dodaj nawyk")
+                        2 -> Icon(Icons.Default.Flag, contentDescription = "Dodaj cel")
+                        else -> Icon(Icons.Default.Check, contentDescription = "Dodaj zadanie")
+                    }
+                }
             }
         }
     ) { padding ->
@@ -270,68 +330,97 @@ fun StartScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            TabRow(selectedTabIndex = selectedTab) {
+            SecondaryTabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            ) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
-                        text = { Text(title) }
+                        text = {
+                            Text(
+                                title,
+                                style = MaterialTheme.typography.labelLarge,
+                                maxLines = 1
+                            )
+                        }
                     )
                 }
             }
 
-            when (selectedTab) {
-                0 -> TasksTab(
-                    scheduledTasks = filteredScheduledTasks,
-                    inboxTasks = filteredInboxTasks,
-                    allTasks = allActiveTasks.applyFilters(taskFilters),
-                    filters = taskFilters,
-                    onTaskClick = { task ->
-                        selectedTask = task
-                        showEditTaskSheet = true
-                    },
-                    onTaskCheckedChange = { taskId ->
-                        val task = filteredScheduledTasks.find { it.id == taskId }
-                            ?: filteredInboxTasks.find { it.id == taskId }
+            AnimatedContent(
+                targetState = selectedTab,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                transitionSpec = {
+                    fadeIn(ChronosMotion.tweenEnter()) togetherWith fadeOut(ChronosMotion.tweenExit())
+                },
+                label = "start_tab_content"
+            ) { tab ->
+                Box(modifier = Modifier.fillMaxSize()) {
+                    when (tab) {
+                        0 -> TasksTab(
+                            scheduledTasks = filteredScheduledTasks,
+                            inboxTasks = filteredInboxTasks,
+                            allTasks = allActiveTasks.applyFilters(taskFilters),
+                            filters = taskFilters,
+                            onTaskClick = { task ->
+                                selectedTask = task
+                                showEditTaskSheet = true
+                            },
+                            onTaskCheckedChange = { taskId ->
+                                val task = filteredScheduledTasks.find { it.id == taskId }
+                                    ?: filteredInboxTasks.find { it.id == taskId }
 
-                        tasksViewModel.toggleTaskCompleted(taskId)
+                                tasksViewModel.toggleTaskCompleted(taskId)
 
-                        if (task != null && !task.isCompleted) {
-                            completionMessage = "Zadanie '${task.title}' zostało ukończone"
-                            completionType = CompletionType.TASK
-                            showCompletionToast = true
-                        }
+                                if (task != null && !task.isCompleted) {
+                                    completionMessage = "Zadanie '${task.title}' zostało ukończone"
+                                    completionType = CompletionType.TASK
+                                    showCompletionToast = true
+                                }
+                            }
+                            ,
+                            onTaskDelete = { taskToDelete ->
+                                tasksViewModel.deleteTask(taskToDelete)
+                            }
+                        )
+
+                        1 -> HabitsTab(
+                            habits = filteredHabits,
+                            filters = habitFilters,
+                            onHabitClick = { habit ->
+                                selectedHabit = habit
+                                showEditHabitSheet = true
+                            },
+                            onHabitCheckedChange = { habitId ->
+                                habitsViewModel.toggleHabitCompleted(habitId)
+                            },
+                            onDeleteHabit = { habit ->
+                                habitsViewModel.deleteHabit(habit)
+                            }
+                        )
+
+                        2 -> GoalsTab(
+                            goals = filteredGoals,
+                            filters = goalFilters,
+                            viewModel = goalsViewModel,
+                            initialExpandedGoalId = initialGoalId,
+                            onGoalClick = { goal ->
+                                android.util.Log.d("StartScreen", "🎯 Clicked goal: ${goal.title}")
+                                selectedGoal = goal
+                            },
+                            onGoalCompleted = { goalTitle ->
+                                completionMessage = "🎉 Cel '$goalTitle' został ukończony w 100%!\n📦 Przeniesiono do archiwum"
+                                completionType = CompletionType.GOAL
+                                showCompletionToast = true
+                            }
+                        )
                     }
-                )
-
-                1 -> HabitsTab(
-                    habits = filteredHabits,
-                    filters = habitFilters,
-                    onHabitClick = { habit ->
-                        selectedHabit = habit
-                        showEditHabitSheet = true
-                    },
-                    onHabitCheckedChange = { habitId ->
-                        habitsViewModel.toggleHabitCompleted(habitId)
-                    }
-                )
-
-                2 -> GoalsTab(
-                    goals = filteredGoals,
-                    filters = goalFilters,
-                    viewModel = goalsViewModel,
-                    initialExpandedGoalId = initialGoalId,
-                    onGoalClick = { goal ->
-                        android.util.Log.d("StartScreen", "🎯 Clicked goal: ${goal.title}")
-                        selectedGoal = goal
-                    },
-                    // ✅ DODAJ CALLBACK:
-                    onGoalCompleted = { goalTitle ->
-                        completionMessage = "🎉 Cel '$goalTitle' został ukończony w 100%!\n📦 Przeniesiono do archiwum"
-                        completionType = CompletionType.GOAL
-                        showCompletionToast = true
-                    }
-                )
+                }
             }
         }
     }
@@ -395,7 +484,7 @@ fun StartScreen(
         )
     }
 
-    if (showEditTaskSheet && selectedTask != null) {
+    AnimatedSheetHost(visible = showEditTaskSheet && selectedTask != null) {
         EditTaskSheet(
             task = selectedTask!!,
             onDismiss = {
@@ -415,7 +504,7 @@ fun StartScreen(
         )
     }
 
-    if (showEditHabitSheet && selectedHabit != null) {
+    AnimatedSheetHost(visible = showEditHabitSheet && selectedHabit != null) {
         EditHabitSheet(
             habit = selectedHabit!!,
             onDismiss = {
@@ -438,6 +527,7 @@ fun StartScreen(
     if (selectedGoal != null) {
         val goalSnapshot = selectedGoal!!
         val currentGoal = filteredGoals.find { it.id == goalSnapshot.id }
+        val currentGoalId = currentGoal?.id ?: goalSnapshot.id
 
         // ✅ DODAJ: Reset selectedGoal po zamknięciu arkusza
         DisposableEffect(goalSnapshot.id) {
@@ -448,9 +538,9 @@ fun StartScreen(
         }
 
 
-        if (currentGoal != null) {
+        AnimatedSheetHost(visible = currentGoal != null) {
             EditGoalSheet(
-                goal = currentGoal,
+                goal = currentGoal ?: goalSnapshot,
                 onDismiss = {
                     android.util.Log.d("StartScreen", "❌ onDismiss - zamykam arkusz")
                     selectedGoal = null
@@ -467,16 +557,16 @@ fun StartScreen(
                     selectedGoal = null
                 },
                 onToggleMiniGoal = { miniGoalId ->
-                    goalsViewModel.toggleMiniGoalCompleted(currentGoal.id, miniGoalId)
+                    goalsViewModel.toggleMiniGoalCompleted(currentGoalId, miniGoalId)
                 },
                 onAddMiniGoal = { miniGoal ->
-                    goalsViewModel.addMiniGoal(currentGoal.id, miniGoal)
+                    goalsViewModel.addMiniGoal(currentGoalId, miniGoal)
                 },
                 onDeleteMiniGoal = { miniGoalId ->
-                    goalsViewModel.deleteMiniGoal(currentGoal.id, miniGoalId)
+                    goalsViewModel.deleteMiniGoal(currentGoalId, miniGoalId)
                 },
                 onUpdateMiniGoal = { miniGoal ->
-                    goalsViewModel.updateMiniGoal(currentGoal.id, miniGoal)
+                    goalsViewModel.updateMiniGoal(currentGoalId, miniGoal)
                 },
                 onGoalCompleted = { title ->
                     completionMessage = "Cel '$title' został ukończony w 100%"
@@ -484,7 +574,8 @@ fun StartScreen(
                     showCompletionToast = true
                 }
             )
-        } else {
+        }
+        if (currentGoal == null) {
                 selectedGoal = null
             }
         }
@@ -499,6 +590,28 @@ fun StartScreen(
     }
 }
 
+@Composable
+private fun AnimatedSheetHost(
+    visible: Boolean,
+    content: @Composable () -> Unit
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+            expandIn(
+                expandFrom = Alignment.Center,
+                initialSize = { IntSize((it.width * 0.92f).toInt(), (it.height * 0.92f).toInt()) },
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessLow
+                )
+            ),
+        exit = fadeOut() + shrinkOut() + scaleOut(targetScale = 0.96f)
+    ) {
+        content()
+    }
+}
+
 // ✅ POZOSTAŁE FUNKCJE (TasksTab, HabitsTab, GoalsTab, HabitItem)
 // Skopiuj je z poprzedniego kodu - są poprawne
 
@@ -507,7 +620,8 @@ fun HabitsTab(
     habits: List<Habit>,
     filters: HabitFilters,
     onHabitClick: (Habit) -> Unit,
-    onHabitCheckedChange: (String) -> Unit
+    onHabitCheckedChange: (String) -> Unit,
+    onDeleteHabit: (Habit) -> Unit
 ) {
     val hasActiveFilters = filters.searchQuery.isNotBlank() ||
             filters.frequencies.isNotEmpty() ||
@@ -543,11 +657,19 @@ fun HabitsTab(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                item {
+                    Text(
+                        text = "🌿 Nawyki (${habits.size})",
+                        style = MaterialTheme.typography.titleMedium.merge(textWithGreenGlow()),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 items(habits, key = { it.id }) { habit ->
                     HabitItem(
                         habit = habit,
                         onHabitClick = { onHabitClick(habit) },
-                        onHabitCheckedChange = onHabitCheckedChange
+                        onHabitCheckedChange = onHabitCheckedChange,
+                        onDeleteHabit = onDeleteHabit
                     )
                 }
             }
@@ -614,6 +736,13 @@ fun GoalsTab(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                item {
+                    Text(
+                        text = "🏆 Cele (${goals.size})",
+                        style = MaterialTheme.typography.titleMedium.merge(textWithGoldGlow()),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 items(goals, key = { it.id }) { goal ->
                     // ✅ NOWY KOD:
                     GoalItem(
@@ -663,10 +792,21 @@ fun GoalsTab(
 fun HabitItem(
     habit: Habit,
     onHabitClick: () -> Unit,
-    onHabitCheckedChange: (String) -> Unit
+    onHabitCheckedChange: (String) -> Unit,
+    onDeleteHabit: (Habit) -> Unit
 ) {
     val today = java.time.LocalDate.now()
     val isCompletedToday = habit.completionDates.contains(today.toString())
+    var showExplosion by remember { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
+    val checkScale by animateFloatAsState(
+        targetValue = if (showExplosion) 1.35f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "habit_check_scale"
+    )
 
     val isActiveToday = when {
         habit.weeklyDays.isNotEmpty() -> habit.weeklyDays.contains(today.dayOfWeek.name)
@@ -674,41 +814,81 @@ fun HabitItem(
         else -> true
     }
 
-    Card(
+    SwipeToDismissBox(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 100.dp), // ✅ Minimalna wysokość
-        onClick = onHabitClick,
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isCompletedToday)
-                Color(0xFF4CAF50).copy(alpha = 0.12f)
-            else
-                MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(16.dp) // ✅ Zaokrąglenie
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp), // ✅ Zwiększony padding
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Checkbox(
-                checked = isCompletedToday,
-                onCheckedChange = {
-                    if (isActiveToday) {
-                        onHabitCheckedChange(habit.id)
+            .heightIn(min = 100.dp),
+        state = rememberSwipeToDismissBoxState(
+            confirmValueChange = { value ->
+                when (value) {
+                    SwipeToDismissBoxValue.StartToEnd -> {
+                        if (!isCompletedToday && isActiveToday) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showExplosion = true
+                            onHabitCheckedChange(habit.id)
+                        }
+                        false
                     }
-                },
-                enabled = isActiveToday,
-                colors = CheckboxDefaults.colors(
-                    checkedColor = Color(0xFF4CAF50)
+                    SwipeToDismissBoxValue.EndToStart -> {
+                        onDeleteHabit(habit)
+                        true
+                    }
+                    SwipeToDismissBoxValue.Settled -> false
+                }
+            },
+            positionalThreshold = { it * 0.3f }
+        ),
+        backgroundContent = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.CenterStart
+            ) {}
+        },
+        enableDismissFromStartToEnd = true,
+        enableDismissFromEndToStart = true
+    ) {
+        Box {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onHabitClick,
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isCompletedToday)
+                        Color(0xFF4CAF50).copy(alpha = 0.12f)
+                    else
+                        MaterialTheme.colorScheme.surface
                 ),
-                modifier = Modifier.padding(end = 4.dp)
-            )
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = isCompletedToday,
+                        onCheckedChange = {
+                            if (isActiveToday) {
+                                if (!isCompletedToday) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showExplosion = true
+                                }
+                                onHabitCheckedChange(habit.id)
+                            }
+                        },
+                        enabled = isActiveToday,
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = Color(0xFF4CAF50)
+                        ),
+                        modifier = Modifier
+                            .padding(end = 4.dp)
+                            .scale(checkScale)
+                    )
 
-            Column(modifier = Modifier.weight(1f)) {
+                    Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = habit.name,
                     style = MaterialTheme.typography.titleMedium.copy( // ✅ titleMedium
@@ -802,7 +982,14 @@ fun HabitItem(
                         color = Color.Red.copy(alpha = 0.7f)
                     )
                 }
+                    }
+                }
             }
+
+            ParticleExplosion(
+                isExploding = showExplosion,
+                onComplete = { showExplosion = false }
+            )
         }
     }
 }
@@ -813,7 +1000,8 @@ fun TasksTab(
     allTasks: List<Task>,
     filters: TaskFilters,
     onTaskClick: (Task) -> Unit,
-    onTaskCheckedChange: (String) -> Unit
+    onTaskCheckedChange: (String) -> Unit,
+    onTaskDelete: (Task) -> Unit
 ) {
     val allEmpty = allTasks.isEmpty()
     val hasActiveFilters = filters.searchQuery.isNotBlank() ||
@@ -879,7 +1067,7 @@ fun TasksTab(
                     item {
                         Text(
                             text = "📥 Bez daty (${inboxTasks.size})",
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleMedium.merge(textWithBlueGlow()),
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -890,6 +1078,7 @@ fun TasksTab(
                             onTaskCheckedChange = onTaskCheckedChange,
                             onTaskClick = { onTaskClick(task) },
                             onTaskLongClick = { onTaskClick(task) },
+                            onDeleteTask = onTaskDelete,
                             showDate = false
                         )
                     }
@@ -899,7 +1088,7 @@ fun TasksTab(
                     item {
                         Text(
                             text = "📅 Zaplanowane (${scheduledTasks.size})",
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleMedium.merge(textWithBlueGlow()),
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -910,6 +1099,7 @@ fun TasksTab(
                             onTaskCheckedChange = onTaskCheckedChange,
                             onTaskClick = { onTaskClick(task) },
                             onTaskLongClick = { onTaskClick(task) },
+                            onDeleteTask = onTaskDelete,
                             showDate = true
                         )
                     }

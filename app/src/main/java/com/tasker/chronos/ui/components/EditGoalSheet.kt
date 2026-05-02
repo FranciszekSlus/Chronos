@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +61,14 @@ fun EditGoalSheet(
         delay(50)
         visible = true
     }
+    val sheetAppearProgress by animateFloatAsState(
+        targetValue = if (visible) 1f else 0.9f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "edit_goal_sheet_appear"
+    )
 
     val progress = goal.getProgress()
     val progressPercentage = goal.getProgressPercentage()
@@ -82,6 +91,11 @@ fun EditGoalSheet(
                     .padding(horizontal = 24.dp)
                     .padding(bottom = 32.dp)
                     .verticalScroll(rememberScrollState())
+                    .graphicsLayer {
+                        scaleX = sheetAppearProgress
+                        scaleY = sheetAppearProgress
+                        translationY = (1f - sheetAppearProgress) * 180f
+                    }
             ) {
                 // Header z gradientem i postępem
                 Box(

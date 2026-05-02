@@ -143,10 +143,10 @@ class HabitReminderReceiver : BroadcastReceiver() {
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
 
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerTime,
-                        pendingIntent
+                    AlarmSchedulerCompat.scheduleWakeupAlarm(
+                        alarmManager = alarmManager,
+                        triggerAtMillis = triggerTime,
+                        pendingIntent = pendingIntent
                     )
 
                     android.util.Log.d("HabitReminder", "   📅 Codzienny - jutro: $tomorrow")
@@ -177,10 +177,10 @@ class HabitReminderReceiver : BroadcastReceiver() {
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
 
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerTime,
-                        pendingIntent
+                    AlarmSchedulerCompat.scheduleWakeupAlarm(
+                        alarmManager = alarmManager,
+                        triggerAtMillis = triggerTime,
+                        pendingIntent = pendingIntent
                     )
 
 
@@ -236,10 +236,10 @@ class HabitReminderReceiver : BroadcastReceiver() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                triggerTime,
-                pendingIntent
+            AlarmSchedulerCompat.scheduleWakeupAlarm(
+                alarmManager = alarmManager,
+                triggerAtMillis = triggerTime,
+                pendingIntent = pendingIntent
             )
 
             android.util.Log.d(
@@ -273,6 +273,8 @@ class HabitReminderReceiver : BroadcastReceiver() {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             putExtra("open_habit", habitId)
+            putExtra("item_type", "habit")
+            putExtra("item_id", habitId)
         }
 
         val pendingIntent = PendingIntent.getActivity(

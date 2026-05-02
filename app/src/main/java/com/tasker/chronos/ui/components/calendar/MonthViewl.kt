@@ -4,6 +4,7 @@ package com.tasker.chronos.ui.components.calendar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -14,17 +15,24 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material3.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.tasker.chronos.data.models.CustomEvent
 import com.tasker.chronos.data.models.EventType
 import com.tasker.chronos.data.models.Goal
@@ -37,6 +45,7 @@ import com.tasker.chronos.viewmodels.TasksViewModel
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 
 @Composable
 fun MonthView(
@@ -51,6 +60,13 @@ fun MonthView(
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedDialogDate by remember { mutableStateOf(LocalDate.now()) }
+    var isMonthExpanded by remember { mutableStateOf(false) }
+    var dragAccumulator by remember { mutableFloatStateOf(0f) }
+    val monthCellExpandProgress by animateFloatAsState(
+        targetValue = if (isMonthExpanded) 1f else 0f,
+        animationSpec = tween(durationMillis = 280),
+        label = "month_cell_expand_animation"
+    )
 
     // Custom Wydarzenia
     // ✅ Custom Wydarzenia (BEZ nawyków z inbox)
@@ -107,6 +123,33 @@ fun MonthView(
             .filter { it.endDate != null }  // ✅ Już filtrowane, ale dla pewności
             .groupBy { it.endDate!! }       // ✅ Wymuś non-null
     }
+    val eventTitlesPerDay = remember(customEvents, highPriorityTasks, goalsWithEndDate) {
+        val titlesMap = mutableMapOf<String, MutableList<String>>()
+
+        customEvents
+            .filter { it.showInMonthView }
+            .forEach { event ->
+                event.getAllDates().forEach { date ->
+                    titlesMap.getOrPut(date) { mutableListOf() }.add(event.title)
+                }
+            }
+
+        highPriorityTasks
+            .forEach { task ->
+                task.date?.let { date ->
+                    titlesMap.getOrPut(date) { mutableListOf() }.add(task.title)
+                }
+            }
+
+        goalsWithEndDate
+            .forEach { goal ->
+                goal.endDate?.let { date ->
+                    titlesMap.getOrPut(date) { mutableListOf() }.add("Cel: ${goal.title}")
+                }
+            }
+
+        titlesMap.mapValues { (_, titles) -> titles.distinct() }
+    }
 
     val firstDayOfMonth = selectedMonth.atDay(1)
     val lastDayOfMonth = selectedMonth.atEndOfMonth()
@@ -153,53 +196,83 @@ fun MonthView(
                 }
             }
 
-            // Siatka dni
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(7),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(allDays.size) { index ->
-                    val date = allDays[index]
-                    val dateString = date.toString()
-                    val isCurrentMonth = date.month == selectedMonth.month
-                    val isToday = date == LocalDate.now()
-                    val isSelected = date == selectedDate
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .pointerInput(isMonthExpanded) {
+                        detectVerticalDragGestures(
+                            onVerticalDrag = { change, dragAmount ->
+                                change.consume()
+                                dragAccumulator += dragAmount
+                                val swipeThreshold = 80f
 
-                    // ✅ NOWE: Zbierz kolory z różnych źródeł
-                    // ✅ Zbierz kolory z różnych źródeł
-                    val colors = mutableListOf<Long>()
-
-// 1. Custom wydarzenia
-                    eventColorsPerDay[dateString]?.let { colors.addAll(it) }
-
-// 2. Zadania WYSOKIEGO priorytetu (czerwony) - POPRAWIONE FILTROWANIE
-                    highPriorityTasksPerDay[dateString]?.let { tasksOnThisDay ->
-                        // ✅ DODATKOWA WALIDACJA - tylko HIGH priority
-                        if (tasksOnThisDay.any { it.priority == TaskPriority.HIGH }) {
-                            colors.add(0xFFF44336L)  // Czerwony tylko dla HIGH
-                        }
+                                if (dragAccumulator >= swipeThreshold && !isMonthExpanded) {
+                                    isMonthExpanded = true
+                                    dragAccumulator = 0f
+                                } else if (dragAccumulator <= -swipeThreshold && isMonthExpanded) {
+                                    isMonthExpanded = false
+                                    dragAccumulator = 0f
+                                }
+                            },
+                            onDragEnd = { dragAccumulator = 0f },
+                            onDragCancel = { dragAccumulator = 0f }
+                        )
                     }
+            ) {
+                val gridHeight = maxHeight
+                val rowSpacing = 4.dp
+                val expandedCellHeight = ((gridHeight - (rowSpacing * 5)) / 6).coerceAtLeast(56.dp)
+                val collapsedCellHeight = (expandedCellHeight * 0.68f).coerceAtLeast(56.dp)
+                val animatedCellHeight = lerp(
+                    start = collapsedCellHeight,
+                    stop = expandedCellHeight,
+                    fraction = monthCellExpandProgress
+                )
 
-                    // 3. Cele z datą końcową (złoty gradient marker)
-                    val hasGoalDeadline = goalsPerDay[dateString] != null
+                // Siatka dni - zawsze 6 rzędów widoczne w obu stanach.
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(7),
+                    modifier = Modifier
+                        .fillMaxSize(),
+                    userScrollEnabled = false,
+                    verticalArrangement = Arrangement.spacedBy(rowSpacing)
+                ) {
+                    items(allDays.size) { index ->
+                        val date = allDays[index]
+                        val dateString = date.toString()
+                        val isCurrentMonth = date.month == selectedMonth.month
+                        val isToday = date == LocalDate.now()
+                        val isSelected = date == selectedDate
 
-                    DayCell(
-                        date = date,
-                        isCurrentMonth = isCurrentMonth,
-                        isToday = isToday,
-                        isSelected = isSelected,
-                        eventColors = colors,
-                        hasGoalDeadline = hasGoalDeadline,  // ✅ NOWY PARAMETR
-                        onClick = {
-                            onDateClick(date)
-                        },
-                        onLongClick = {
-                            if (eventsViewModel != null) {
-                                selectedDialogDate = date
-                                showAddDialog = true
+                        val colors = mutableListOf<Long>()
+                        eventColorsPerDay[dateString]?.let { colors.addAll(it) }
+                        highPriorityTasksPerDay[dateString]?.let { tasksOnThisDay ->
+                            if (tasksOnThisDay.any { it.priority == TaskPriority.HIGH }) {
+                                colors.add(0xFFF44336L)
                             }
                         }
-                    )
+                        val hasGoalDeadline = goalsPerDay[dateString] != null
+
+                        DayCell(
+                            date = date,
+                            isCurrentMonth = isCurrentMonth,
+                            isToday = isToday,
+                            isSelected = isSelected,
+                            eventColors = colors,
+                            eventTitles = eventTitlesPerDay[dateString].orEmpty(),
+                            expandProgress = monthCellExpandProgress,
+                            cellHeight = animatedCellHeight,
+                            hasGoalDeadline = hasGoalDeadline,
+                            onClick = { onDateClick(date) },
+                            onLongClick = {
+                                if (eventsViewModel != null) {
+                                    selectedDialogDate = date
+                                    showAddDialog = true
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -240,13 +313,24 @@ fun DayCell(
     isToday: Boolean,
     isSelected: Boolean,
     eventColors: List<Long>,
+    eventTitles: List<String>,
+    expandProgress: Float,
+    cellHeight: androidx.compose.ui.unit.Dp,
     hasGoalDeadline: Boolean,  // ✅ NOWY PARAMETR
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
+    val shouldShowTitles = expandProgress > 0.2f
+    val maxTitles = (1 + (expandProgress * 3f)).roundToInt().coerceIn(1, 4)
+    val dotsSpreadProgress by animateFloatAsState(
+        targetValue = if (isSelected) 1f else 0f,
+        animationSpec = tween(durationMillis = 260),
+        label = "month_dots_spread"
+    )
+
     Box(
         modifier = Modifier
-            .aspectRatio(1f)
+            .height(cellHeight)
             .padding(2.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(
@@ -319,17 +403,50 @@ fun DayCell(
 
             // Kropki dla wydarzeń (custom + zadania wysokiego priorytetu)
             if (eventColors.isNotEmpty()) {
-                Row(
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.padding(top = 2.dp)
+                Box(
+                    modifier = Modifier
+                        .padding(top = 2.dp)
+                        .height(8.dp)
+                        .width(34.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    eventColors.take(3).forEach { color ->
+                    val collapsedStep = 4f
+                    val expandedStep = 9f
+                    val stepPx = collapsedStep + (expandedStep - collapsedStep) * dotsSpreadProgress
+                    val count = eventColors.take(3).size
+                    eventColors.take(3).forEachIndexed { index, color ->
+                        val x = ((index - (count - 1) / 2f) * stepPx).toInt()
                         Box(
                             modifier = Modifier
+                                .offset { IntOffset(x = x, y = 0) }
+                                .zIndex(index.toFloat())
                                 .size(6.dp)
-                                .padding(horizontal = 1.dp)
                                 .clip(CircleShape)
                                 .background(Color(color))
+                        )
+                    }
+                }
+            }
+
+            if (shouldShowTitles && eventTitles.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 2.dp),
+                    verticalArrangement = Arrangement.spacedBy(1.dp)
+                ) {
+                    eventTitles.take(maxTitles).forEach { title ->
+                        Text(
+                            text = title,
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (isCurrentMonth) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                            }
                         )
                     }
                 }

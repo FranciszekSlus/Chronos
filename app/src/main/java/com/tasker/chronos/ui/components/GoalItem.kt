@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tasker.chronos.data.models.Goal
 import com.tasker.chronos.data.models.MiniGoal
+import com.tasker.chronos.data.models.periodicReminderSummary
 import com.tasker.chronos.ui.theme.*
 import com.tasker.chronos.utils.formatDaysLeft
 import java.time.LocalDate
@@ -38,6 +39,11 @@ fun GoalItem(
     onExpandToggle: () -> Unit = {}
 ) {
     val progress = goal.getProgress()
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "goal_progress_animation"
+    )
     val progressPercentage = goal.getProgressPercentage()
     val isCompleted = goal.isCompleted()
     val hasMiniGoals = goal.miniGoals.isNotEmpty()
@@ -50,18 +56,38 @@ fun GoalItem(
         }
     }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isExpanded) 8.dp else 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isCompleted && hasMiniGoals)
-                GoalOrange.copy(alpha = 0.12f)
-            else
-                MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(16.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(Color(0xFFC79200), Color(0xFFF7C948))
+                )
+            )
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(4.dp)
+                    .background(Color(0xFF8A6D00).copy(alpha = 0.9f))
+            )
+
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(1.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = if (isExpanded) 8.dp else 2.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isCompleted && hasMiniGoals)
+                        Color(0xFFFFF5D6)
+                    else
+                        Color(0xFFFFFDF5)
+                ),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
             // === HEADER (zawsze widoczny) ===
             Row(
                 modifier = Modifier
@@ -100,9 +126,9 @@ fun GoalItem(
                                 else null
                             ),
                             color = if (isCompleted && hasMiniGoals)
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                Color(0xFF5A4A12).copy(alpha = 0.75f)
                             else
-                                MaterialTheme.colorScheme.onSurface,
+                                Color(0xFF2F2500),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -120,7 +146,7 @@ fun GoalItem(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             LinearProgressIndicator(
-                                progress = { progress },
+                                progress = { animatedProgress.coerceIn(0f, 1f) },
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(8.dp)
@@ -133,7 +159,7 @@ fun GoalItem(
                                 text = "$progressPercentage%",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = GoalOrange
+                                color = Color(0xFF8A6D00)
                             )
                         }
                     }
@@ -165,6 +191,23 @@ fun GoalItem(
                                     fontWeight = if (daysLeftText == null) FontWeight.Bold else FontWeight.Medium,
                                     color = if (daysLeftText == null) PriorityHigh else MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
+
+                        goal.periodicReminderSummary()?.let { reminderText ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
+                            ) {
+                                Text(
+                                    text = reminderText,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -289,6 +332,8 @@ fun GoalItem(
                         }
                     }
                 }
+            }
+        }
             }
         }
     }

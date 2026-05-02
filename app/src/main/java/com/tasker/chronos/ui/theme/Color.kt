@@ -3,27 +3,46 @@ package com.tasker.chronos.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// ✅ NOWE: Blue Wave Theme - Główne kolory
-val BluePrimary = Color(0xFF004AF3)      // ✅ Nowy jasny niebieski
-val BluePrimaryDark = Color(0xFF002C8F)
-val BluePrimaryLight = Color(0xFF3491FF)   // Jasny niebieski
+// ─── Pastelowa paleta Chronos ───────────────────────────────────────────────
 
-// Warianty dla różnych stanów
-val BluePrimaryContainer = Color(0xFFD0E8FF)  // Jasny niebieski kontener
-val BlueOnPrimaryContainer = Color(0xFF001D35)  // Tekst na kontenerze
+/** Główny akcent — lawendowo‑indygo */
+val PastelPrimary = Color(0xFF8B9CF0)
+val PastelPrimaryDark = Color(0xFF6B7FD6)
+val PastelPrimaryLight = Color(0xFFB4C2FF)
 
-// ✅ Kolory dla priorytetów zadań (pozostają bez zmian)
-val PriorityHigh = Color(0xFFF44336)      // Czerwony
-val PriorityMedium = Color(0xFFFFC107)    // Żółty
-val PriorityLow = Color(0xFF4CAF50)       // Zielony
+val PastelPrimaryContainer = Color(0xFFE8ECFF)
+val PastelOnPrimaryContainer = Color(0xFF1F2740)
 
-// ✅ Kolory dla nawyków
-val HabitGreen = Color(0xFF4CAF50)        // Zielony dla nawyków
+/** Delikatny róż / brzoskwinia (akcent drugorzędny) */
+val PastelSecondary = Color(0xFFF0A8C4)
+val PastelSecondaryDark = Color(0xFFE28BB0)
+val PastelSecondaryContainer = Color(0xFFFFE4EE)
+val PastelOnSecondaryContainer = Color(0xFF3D1F2A)
 
-// ✅ Kolory dla celów (złoto-pomarańczowy gradient)
-val GoalGold = Color(0xFFFFD700)          // Złoty
-val GoalOrange = Color(0xFFFFA500)        // Pomarańczowy
+/** Miętowy / seledyn (akcent trzeci) */
+val PastelTertiary = Color(0xFF9ED9CC)
+val PastelTertiaryContainer = Color(0xFFDFF7F0)
+val PastelOnTertiaryContainer = Color(0xFF1A3D36)
 
-// Kolory tła i powierzchni
-val SurfaceLight = Color(0xFFFAFAFA)
-val SurfaceDark = Color(0xFF121212)
+// Priorytety zadań (pastel, ale czytelny)
+val PriorityHigh = Color(0xFFFF9A9A)
+val PriorityMedium = Color(0xFFFFE08A)
+val PriorityLow = Color(0xFFB8F0C0)
+
+// Nawyki
+val HabitGreen = Color(0xFF9FE3B0)
+
+// Cele
+val GoalGold = Color(0xFFF7D774)
+val GoalOrange = Color(0xFFF2C94C)
+
+// Powierzchnie
+val SurfaceLight = Color(0xFFF7F5FF)
+val SurfaceDark = Color(0xFF1A1D26)
+
+// Alias pod istniejące importy w projekcie (filtry, arkusze itd.)
+val BluePrimary = PastelPrimary
+val BluePrimaryDark = PastelPrimaryDark
+val BluePrimaryLight = PastelPrimaryLight
+val BluePrimaryContainer = PastelPrimaryContainer
+val BlueOnPrimaryContainer = PastelOnPrimaryContainer

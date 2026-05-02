@@ -4,6 +4,7 @@ package com.tasker.chronos.ui.components.calendar
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -212,7 +213,7 @@ fun HourSlot(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(start = 70.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             events.forEach { event ->
                 DraggableEventCard(
@@ -293,8 +294,9 @@ fun DraggableEventCard(
                 )
             },
         colors = CardDefaults.cardColors(
-            containerColor = backgroundColor.copy(alpha = 0.15f)
+            containerColor = backgroundColor.copy(alpha = 0.35f)
         ),
+        border = BorderStroke(1.dp, backgroundColor.copy(alpha = 0.35f)),
         shape = RoundedCornerShape(12.dp)
     ) {
         Row(
@@ -303,15 +305,6 @@ fun DraggableEventCard(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .height(40.dp)
-                    .background(backgroundColor, RoundedCornerShape(2.dp))
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = event.title,

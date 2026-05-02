@@ -14,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -52,6 +53,16 @@ fun AddTaskDialog(
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var showReminderTimePicker by remember { mutableStateOf(false) }
+    var sheetEntered by remember { mutableStateOf(false) }
+    val sheetAppearProgress by animateFloatAsState(
+        targetValue = if (sheetEntered) 1f else 0.88f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "add_task_sheet_appear"
+    )
+    LaunchedEffect(Unit) { sheetEntered = true }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -63,6 +74,11 @@ fun AddTaskDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
+                .graphicsLayer {
+                    scaleX = sheetAppearProgress
+                    scaleY = sheetAppearProgress
+                    translationY = (1f - sheetAppearProgress) * 220f
+                }
         ) {
             // === GRADIENT HEADER (STICKY) ===
             Box(

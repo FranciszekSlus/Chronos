@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tasker.chronos.data.models.Achievements
+import com.tasker.chronos.ui.components.GlassSurface
 import com.tasker.chronos.viewmodels.UserProfileViewModel
 import com.tasker.chronos.viewmodels.SettingsViewModel
 
@@ -38,6 +39,7 @@ fun SettingsScreen(
     var showExportDialog by remember { mutableStateOf(false) }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text("Ustawienia", fontWeight = FontWeight.Bold) },
@@ -57,59 +59,69 @@ fun SettingsScreen(
             // Sekcja: Profil
             SectionHeader("Profil")
 
-            ProfileCard(
-                totalPoints = userProfile.totalPoints,
-                onResetPoints = { showResetDialog = true }
-            )
+            GlassSurface(modifier = Modifier.padding(horizontal = 16.dp)) {
+                ProfileCard(
+                    totalPoints = userProfile.totalPoints,
+                    onResetPoints = { showResetDialog = true }
+                )
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // Sekcja: Powiadomienia
             SectionHeader("Powiadomienia")
 
-            SettingsItem(
-                icon = Icons.Default.Notifications,
-                title = "Powiadomienia",
-                subtitle = if (settings.notificationsEnabled) "Włączone" else "Wyłączone",
-                trailing = {
-                    Switch(
-                        checked = settings.notificationsEnabled,
-                        onCheckedChange = { settingsViewModel.setNotificationsEnabled(it) }
-                    )
-                }
-            )
+            GlassSurface(modifier = Modifier.padding(horizontal = 16.dp)) {
+                SettingsItem(
+                    icon = Icons.Default.Notifications,
+                    title = "Powiadomienia",
+                    subtitle = if (settings.notificationsEnabled) "Włączone" else "Wyłączone",
+                    trailing = {
+                        Switch(
+                            checked = settings.notificationsEnabled,
+                            onCheckedChange = { settingsViewModel.setNotificationsEnabled(it) }
+                        )
+                    }
+                )
+            }
             Spacer(modifier = Modifier.height(24.dp))
 
             // Sekcja: Archiwum
             SectionHeader("Dane")
 
-            SettingsItem(
-                icon = Icons.Default.Archive,
-                title = "Archiwum",
-                subtitle = "Przeglądaj ukończone elementy",
-                onClick = onNavigateToArchive
-            )
+            GlassSurface(modifier = Modifier.padding(horizontal = 16.dp)) {
+                SettingsItem(
+                    icon = Icons.Default.Archive,
+                    title = "Archiwum",
+                    subtitle = "Przeglądaj ukończone elementy",
+                    onClick = onNavigateToArchive
+                )
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
 // Sekcja: Statystyki
             SectionHeader("Statystyki")
 
-            SettingsItem(
-                icon = Icons.Default.BarChart, // ✅ DODAJ
-                title = "Statystyki",
-                subtitle = "Zobacz swoją aktywność",
-                onClick = onNavigateToStatistics
-            )
+            GlassSurface(modifier = Modifier.padding(horizontal = 16.dp)) {
+                SettingsItem(
+                    icon = Icons.Default.BarChart, // ✅ DODAJ
+                    title = "Statystyki",
+                    subtitle = "Zobacz swoją aktywność",
+                    onClick = onNavigateToStatistics
+                )
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            SettingsItem(
-                icon = Icons.Default.EmojiEvents,
-                title = "Osiągnięcia",
-                subtitle = "${Achievements.getUnlocked(userProfile.totalPoints).size} / ${Achievements.all.size} odblokowanych",
-                onClick = onNavigateToAchievements
-            )
+            GlassSurface(modifier = Modifier.padding(horizontal = 16.dp)) {
+                SettingsItem(
+                    icon = Icons.Default.EmojiEvents,
+                    title = "Osiągnięcia",
+                    subtitle = "${Achievements.getUnlocked(userProfile.totalPoints).size} / ${Achievements.all.size} odblokowanych",
+                    onClick = onNavigateToAchievements
+                )
+            }
 
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -117,19 +129,22 @@ fun SettingsScreen(
             // Sekcja: Pomoc
             SectionHeader("Pomoc")
 
-            SettingsItem(
-                icon = Icons.Default.Help,
-                title = "Tutorial",
-                subtitle = "Zobacz przewodnik po aplikacji",
-                onClick = onNavigateToHelp
-            )
+            GlassSurface(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Column {
+                    SettingsItem(
+                        icon = Icons.Default.Help,
+                        title = "Tutorial",
+                        subtitle = "Zobacz przewodnik po aplikacji",
+                        onClick = onNavigateToHelp
+                    )
 
-            SettingsItem(
-                icon = Icons.Default.Info,
-                title = "O aplikacji",
-                subtitle = "Chronos 0.2 v @elozelocompany 01.02.2026 (ostatnia modyfikacja 03.03.2026)"
-
-            )
+                    SettingsItem(
+                        icon = Icons.Default.Info,
+                        title = "O aplikacji",
+                        subtitle = "Chronos 0.2 v @elozelocompany 01.02.2026 (ostatnia modyfikacja 03.03.2026)"
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
         }
@@ -192,8 +207,7 @@ fun ProfileCard(
 ) {
     Card(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer

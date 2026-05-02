@@ -5,7 +5,6 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import com.tasker.chronos.data.models.CustomEvent
 import com.tasker.chronos.utils.CustomEventNotificationReceiver
 import java.time.LocalDate
@@ -53,6 +52,7 @@ object CustomEventScheduler {
 
             val intent = Intent(context, CustomEventNotificationReceiver::class.java).apply {
                 putExtra("event_id", event.id)
+                putExtra("event_date", event.date)
                 putExtra("title", event.title)
                 putExtra("description", event.description)
                 putExtra("start_time", event.startTime)
@@ -68,27 +68,11 @@ object CustomEventScheduler {
 
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerTimeMillis,
-                        pendingIntent
-                    )
-                } else {
-                    alarmManager.setAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerTimeMillis,
-                        pendingIntent
-                    )
-                }
-            } else {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    triggerTimeMillis,
-                    pendingIntent
-                )
-            }
+            AlarmSchedulerCompat.scheduleWakeupAlarm(
+                alarmManager = alarmManager,
+                triggerAtMillis = triggerTimeMillis,
+                pendingIntent = pendingIntent
+            )
 
             android.util.Log.d(
                 "CustomEventScheduler",
@@ -125,6 +109,7 @@ object CustomEventScheduler {
 
             val intent = Intent(context, CustomEventNotificationReceiver::class.java).apply {
                 putExtra("event_id", "${event.id}_reminder")  // ✅ Inne ID dla przypomnienia
+                putExtra("event_date", event.date)
                 putExtra("title", event.title)
                 putExtra("description", event.description)
                 putExtra("start_time", event.startTime)
@@ -141,27 +126,11 @@ object CustomEventScheduler {
 
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerTimeMillis,
-                        pendingIntent
-                    )
-                } else {
-                    alarmManager.setAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerTimeMillis,
-                        pendingIntent
-                    )
-                }
-            } else {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    triggerTimeMillis,
-                    pendingIntent
-                )
-            }
+            AlarmSchedulerCompat.scheduleWakeupAlarm(
+                alarmManager = alarmManager,
+                triggerAtMillis = triggerTimeMillis,
+                pendingIntent = pendingIntent
+            )
 
             android.util.Log.d(
                 "CustomEventScheduler",

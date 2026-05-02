@@ -22,7 +22,8 @@ class CustomEventNotificationReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        val eventId = intent.getStringExtra("event_id") ?: return
+        val rawEventId = intent.getStringExtra("event_id") ?: return
+        val eventDate = intent.getStringExtra("event_date").orEmpty()
         val title = intent.getStringExtra("title") ?: "Przypomnienie"
         val description = intent.getStringExtra("description") ?: ""
         val startTime = intent.getStringExtra("start_time") ?: ""
@@ -31,9 +32,14 @@ class CustomEventNotificationReceiver : BroadcastReceiver() {
 
         android.util.Log.d("CustomEventReceiver", "🔔 Powiadomienie ($notificationType): $title")
 
+        val openEventId = rawEventId.removeSuffix("_reminder")
+        val notificationId = "${rawEventId}_$notificationType".hashCode()
+
         showNotification(
             context,
-            eventId.hashCode(),
+            notificationId,
+            openEventId,
+            eventDate,
             title,
             description,
             startTime,
@@ -44,7 +50,9 @@ class CustomEventNotificationReceiver : BroadcastReceiver() {
 
     private fun showNotification(
         context: Context,
-        id: Int,
+        notificationId: Int,
+        openEventId: String,
+        eventDate: String,
         title: String,
         description: String,
         startTime: String,
@@ -55,11 +63,15 @@ class CustomEventNotificationReceiver : BroadcastReceiver() {
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("open_calendar", true)
+            putExtra("item_type", "event")
+            putExtra("open_event_id", openEventId)
+            putExtra("open_event_date", eventDate)
         }
 
         val pendingIntent = PendingIntent.getActivity(
             context,
-            id,
+            notificationId,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -100,7 +112,7 @@ class CustomEventNotificationReceiver : BroadcastReceiver() {
             .build()
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(id, notification)
+        notificationManager.notify(notificationId, notification)
 
         android.util.Log.d("CustomEventReceiver", "✅ Wyświetlono powiadomienie: $notificationTitle")
     }

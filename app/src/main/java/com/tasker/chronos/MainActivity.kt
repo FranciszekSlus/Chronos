@@ -8,27 +8,20 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
-import androidx.navigation.NavHostController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
+import com.tasker.chronos.navigation.NotificationNavigationTarget
 import com.tasker.chronos.navigation.ChronosNavigation
-import com.tasker.chronos.ui.screens.StartScreen
-import com.tasker.chronos.ui.screens.CalendarScreen
 import com.tasker.chronos.ui.screens.LoadingScreen
-import com.tasker.chronos.ui.screens.SettingsScreen
 import com.tasker.chronos.ui.theme.ChronosTheme
 import com.tasker.chronos.workers.HabitResetWorker
 
 class MainActivity : ComponentActivity() {
+    private val notificationTargetState = mutableStateOf<NotificationNavigationTarget?>(null)
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -49,6 +42,7 @@ class MainActivity : ComponentActivity() {
 
         checkNotificationPermission()
         initializeNotifications()
+        notificationTargetState.value = parseNotificationIntent(intent)
 
         setContent {
             ChronosTheme {
@@ -65,7 +59,7 @@ class MainActivity : ComponentActivity() {
 
                 if (isAppReady) {
                     // ✅ Aplikacja gotowa - pokaż nawigację
-                    ChronosNavigation()
+                    ChronosNavigation(notificationTarget = notificationTargetState.value)
                 } else {
                     // ✅ Ładowanie - pokaż splash screen
                     LoadingScreen()
@@ -102,59 +96,56 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
-
-        val itemId = intent.getStringExtra("item_id")
-        val itemType = intent.getStringExtra("item_type")
-
-        when (itemType) {
-            "habit" -> android.util.Log.d("MainActivity", "🔔 Otwórz nawyk: $itemId")
-            "task" -> android.util.Log.d("MainActivity", "🔔 Otwórz zadanie: $itemId")
-            "goal" -> android.util.Log.d("MainActivity", "🔔 Otwórz cel: $itemId")
-        }
+        setIntent(intent)
+        notificationTargetState.value = parseNotificationIntent(intent)
     }
-}
 
-// ═══════════════════════════════════════════════════════════
-// GŁÓWNY EKRAN Z NAWIGACJĄ
-// ═══════════════════════════════════════════════════════════
+    private fun parseNotificationIntent(intent: android.content.Intent?): NotificationNavigationTarget? {
+        if (intent == null) return null
 
-
-
-@Composable
-fun BottomNavigationBar(navController: NavHostController) {
-    val items = listOf(
-        BottomNavItem("home", "Start", Icons.Default.Home),
-        BottomNavItem("calendar", "Kalendarz", Icons.Default.CalendarToday),
-        BottomNavItem("settings", "Ustawienia", Icons.Default.Settings)
-    )
-
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
-
-    NavigationBar {
-        items.forEach { item ->
-            NavigationBarItem(
-                icon = { Icon(item.icon, contentDescription = item.label) },
-                label = { Text(item.label) },
-                selected = currentRoute == item.route,
-                onClick = {
-                    if (currentRoute != item.route) {
-                        navController.navigate(item.route) {
-                            popUpTo(navController.graph.startDestinationId) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
-                }
+        val taskId = intent.getStringExtra("open_task")
+            ?: intent.takeIf { it.getStringExtra("item_type") == "task" }?.getStringExtra("item_id")
+        if (!taskId.isNullOrBlank()) {
+            return NotificationNavigationTarget(
+                tabIndex = 0,
+                taskId = taskId
             )
         }
+
+        val habitId = intent.getStringExtra("open_habit")
+            ?: intent.takeIf { it.getStringExtra("item_type") == "habit" }?.getStringExtra("item_id")
+        if (!habitId.isNullOrBlank()) {
+            return NotificationNavigationTarget(
+                tabIndex = 1,
+                habitId = habitId
+            )
+        }
+
+        val goalId = intent.getStringExtra("open_goal")
+            ?: intent.takeIf { it.getStringExtra("item_type") == "goal" }?.getStringExtra("item_id")
+        if (!goalId.isNullOrBlank()) {
+            return NotificationNavigationTarget(
+                tabIndex = 2,
+                goalId = goalId
+            )
+        }
+
+        val openCalendar = intent.getBooleanExtra("open_calendar", false) ||
+            intent.getStringExtra("item_type") == "event"
+        if (openCalendar) {
+            val rawEventId = intent.getStringExtra("open_event_id")
+                ?: intent.getStringExtra("event_id")
+            val calendarEventId = rawEventId?.removeSuffix("_reminder")?.takeIf { it.isNotBlank() }
+            val calendarEventDate = intent.getStringExtra("open_event_date")
+                ?: intent.getStringExtra("event_date")
+            return NotificationNavigationTarget(
+                tabIndex = 0,
+                openCalendar = true,
+                calendarEventId = calendarEventId,
+                calendarEventDate = calendarEventDate
+            )
+        }
+
+        return null
     }
 }
-
-data class BottomNavItem(
-    val route: String,
-    val label: String,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector
-)

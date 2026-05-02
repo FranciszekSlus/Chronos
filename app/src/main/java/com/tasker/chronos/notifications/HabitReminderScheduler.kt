@@ -5,7 +5,6 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import com.tasker.chronos.data.models.Habit
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -36,15 +35,6 @@ object HabitReminderScheduler {
 
         try {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-
-            // Sprawdź uprawnienia (Android 12+)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (!alarmManager.canScheduleExactAlarms()) {
-                    android.util.Log.e("HabitReminder", "❌ Brak uprawnień do exact alarms!")
-                    android.util.Log.d("HabitReminder", "═══════════════════════════════════")
-                    return
-                }
-            }
 
             val time = LocalTime.parse(habit.reminderTime)
             android.util.Log.d("HabitReminder", "⏰ Godzina: $time")
@@ -100,11 +90,10 @@ object HabitReminderScheduler {
             }
         }
 
-        // ✅ ZMIANA: Użyj setExactAndAllowWhileIdle zamiast setRepeating
-        alarmManager.setExactAndAllowWhileIdle(
-            AlarmManager.RTC_WAKEUP,
-            calendar.timeInMillis,
-            pendingIntent
+        AlarmSchedulerCompat.scheduleWakeupAlarm(
+            alarmManager = alarmManager,
+            triggerAtMillis = calendar.timeInMillis,
+            pendingIntent = pendingIntent
         )
 
         android.util.Log.d("HabitReminder", "   Typ: Codzienny (exact alarm)")
@@ -179,20 +168,11 @@ object HabitReminderScheduler {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
 
-                // ✅ ZMIANA: Użyj setExactAndAllowWhileIdle zamiast setRepeating
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerTime,
-                        pendingIntent
-                    )
-                } else {
-                    alarmManager.setExact(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerTime,
-                        pendingIntent
-                    )
-                }
+                AlarmSchedulerCompat.scheduleWakeupAlarm(
+                    alarmManager = alarmManager,
+                    triggerAtMillis = triggerTime,
+                    pendingIntent = pendingIntent
+                )
 
                 android.util.Log.d("HabitReminder", "   ✅ ZAPLANOWANO (exact): $dayName za $daysUntil dni")
             } catch (e: Exception) {
@@ -249,11 +229,10 @@ object HabitReminderScheduler {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
 
-                // ✅ Pojedynczy alarm (reschedule w Receiver)
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    triggerTime,
-                    pendingIntent
+                AlarmSchedulerCompat.scheduleWakeupAlarm(
+                    alarmManager = alarmManager,
+                    triggerAtMillis = triggerTime,
+                    pendingIntent = pendingIntent
                 )
 
                 android.util.Log.d(

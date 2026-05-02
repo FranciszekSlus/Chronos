@@ -54,7 +54,7 @@ fun GlassCard(
                     })
                 } else Modifier
             ),
-        shape = RoundedCornerShape(24.dp),
+        shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
         ),
@@ -389,7 +389,7 @@ fun AnimatedTextField(
             Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
         },
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.medium,
         singleLine = true
     )
 }
@@ -401,7 +401,7 @@ fun GlassSurface(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         tonalElevation = 4.dp
     ) {
@@ -423,7 +423,7 @@ fun GlassButton(
             containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
             contentColor = MaterialTheme.colorScheme.primary
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = MaterialTheme.shapes.small
     ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),

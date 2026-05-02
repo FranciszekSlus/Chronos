@@ -3,6 +3,7 @@ package com.tasker.chronos
 
 import android.app.Application
 import com.tasker.chronos.workers.HabitResetWorker
+import com.tasker.chronos.workers.ReminderHealthCheckWorker
 
 
 class ChronosApplication : Application() {
@@ -26,6 +27,7 @@ class ChronosApplication : Application() {
         try {
             // ✅ Reset nawyków o północy
             HabitResetWorker.scheduleMidnightReset(this)
+            ReminderHealthCheckWorker.schedule(this)
 
 
 

@@ -23,6 +23,8 @@ import com.tasker.chronos.data.models.DaySchedule
 import com.tasker.chronos.data.models.ScheduleEvent
 import com.tasker.chronos.viewmodels.DayScheduleViewModel
 import com.tasker.chronos.viewmodels.EventsViewModel
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -284,6 +286,12 @@ fun CreateEditScheduleDialog(
     var events by remember { mutableStateOf(schedule?.events ?: emptyList()) }
     var showAddEventDialog by remember { mutableStateOf(false) }
     var editingEvent by remember { mutableStateOf<ScheduleEvent?>(null) }
+    val suggestedStartTime = remember(events) {
+        events.maxByOrNull { parseTimeToMinutes(it.endTime) }?.endTime ?: "09:00"
+    }
+    val suggestedEndTime = remember(suggestedStartTime) {
+        addMinutesToTime(suggestedStartTime, 60)
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -384,6 +392,8 @@ fun CreateEditScheduleDialog(
     if (showAddEventDialog || editingEvent != null) {
         ScheduleEventDialog(
             event = editingEvent,
+            initialStartTime = if (editingEvent == null) suggestedStartTime else null,
+            initialEndTime = if (editingEvent == null) suggestedEndTime else null,
             onDismiss = {
                 showAddEventDialog = false
                 editingEvent = null
@@ -404,12 +414,14 @@ fun CreateEditScheduleDialog(
 @Composable
 fun ScheduleEventDialog(
     event: ScheduleEvent?,
+    initialStartTime: String? = null,
+    initialEndTime: String? = null,
     onDismiss: () -> Unit,
     onSave: (ScheduleEvent) -> Unit
 ) {
     var title by remember { mutableStateOf(event?.title ?: "") }
-    var startTime by remember { mutableStateOf(event?.startTime ?: "09:00") }
-    var endTime by remember { mutableStateOf(event?.endTime ?: "10:00") }
+    var startTime by remember { mutableStateOf(event?.startTime ?: initialStartTime ?: "09:00") }
+    var endTime by remember { mutableStateOf(event?.endTime ?: initialEndTime ?: "10:00") }
     var selectedColor by remember { mutableStateOf(event?.color ?: 0xFF2196F3L) }
     var description by remember { mutableStateOf(event?.description ?: "") }
 
@@ -438,27 +450,16 @@ fun ScheduleEventDialog(
                     singleLine = true
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = startTime,
-                        onValueChange = { startTime = it },
-                        label = { Text("Od") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        placeholder = { Text("09:00") }
-                    )
-                    OutlinedTextField(
-                        value = endTime,
-                        onValueChange = { endTime = it },
-                        label = { Text("Do") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        placeholder = { Text("10:00") }
-                    )
-                }
+                TimePickerRow(
+                    label = "Od",
+                    selectedTime = startTime,
+                    onTimeSelected = { startTime = it }
+                )
+                TimePickerRow(
+                    label = "Do",
+                    selectedTime = endTime,
+                    onTimeSelected = { endTime = it }
+                )
 
                 Text("Kolor:", fontSize = 13.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -500,4 +501,82 @@ fun ScheduleEventDialog(
             TextButton(onClick = onDismiss) { Text("Anuluj") }
         }
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TimePickerRow(
+    label: String,
+    selectedTime: String,
+    onTimeSelected: (String) -> Unit
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    val initialHour = selectedTime.substringBefore(":").toIntOrNull() ?: 9
+    val initialMinute = selectedTime.substringAfter(":", "00").toIntOrNull() ?: 0
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { showPicker = true }
+    ) {
+        OutlinedTextField(
+            value = selectedTime,
+            onValueChange = {},
+            readOnly = true,
+            enabled = false,
+            label = { Text(label) },
+            trailingIcon = { Icon(Icons.Default.AccessTime, contentDescription = null) },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                disabledBorderColor = MaterialTheme.colorScheme.outline,
+                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        )
+    }
+
+    if (showPicker) {
+        val timePickerState = rememberTimePickerState(
+            initialHour = initialHour,
+            initialMinute = initialMinute,
+            is24Hour = true
+        )
+        AlertDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onTimeSelected(String.format("%02d:%02d", timePickerState.hour, timePickerState.minute))
+                        showPicker = false
+                    }
+                ) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) { Text("Anuluj") }
+            },
+            text = {
+                TimePicker(state = timePickerState)
+            }
+        )
+    }
+}
+
+private fun parseTimeToMinutes(time: String): Int {
+    return try {
+        val localTime = LocalTime.parse(time, DateTimeFormatter.ofPattern("HH:mm"))
+        localTime.hour * 60 + localTime.minute
+    } catch (_: Exception) {
+        0
+    }
+}
+
+private fun addMinutesToTime(time: String, minutesToAdd: Long): String {
+    return try {
+        LocalTime.parse(time, DateTimeFormatter.ofPattern("HH:mm"))
+            .plusMinutes(minutesToAdd)
+            .format(DateTimeFormatter.ofPattern("HH:mm"))
+    } catch (_: Exception) {
+        "10:00"
+    }
 }

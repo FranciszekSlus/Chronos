@@ -1,6 +1,18 @@
 // Plik: ui/screens/CalendarScreen.kt - ZINTEGROWANY Z INBOX
 package com.tasker.chronos.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -24,6 +36,8 @@ import com.tasker.chronos.viewmodels.EventsViewModel
 import com.tasker.chronos.viewmodels.GoalsViewModel
 import com.tasker.chronos.viewmodels.HabitsViewModel
 import com.tasker.chronos.viewmodels.TasksViewModel
+import com.tasker.chronos.ui.theme.ChronosMotion
+import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
@@ -36,12 +50,16 @@ enum class CalendarViewType {
 fun CalendarScreen(
     calendarViewModel: CalendarViewModel? = null,
     habitsViewModel: HabitsViewModel? = null,
+    tasksViewModel: TasksViewModel = viewModel(),
+    deepLinkEventId: String? = null,
+    deepLinkEventDate: String? = null,
+    deepLinkNonce: Long? = null,
+    onCalendarDeepLinkHandled: () -> Unit = {},
     onNavigateToGoal: (String) -> Unit,
     onNavigateToSchedules: (String) -> Unit = {} // ✅ DODAJ TEN PARAMETR
 ) {
     val eventsViewModel: EventsViewModel = viewModel()
     val goalsViewModel: GoalsViewModel = viewModel()
-    val tasksViewModel: TasksViewModel = viewModel() // ✅ DODANE
     val habitsViewModelLocal: HabitsViewModel = habitsViewModel ?: viewModel() // ✅ UŻYJ PRZEKAZANEGO LUB NOWEGO
 
     val selectedDate by eventsViewModel.selectedDate.collectAsState()
@@ -50,7 +68,25 @@ fun CalendarScreen(
 
     var currentView by remember { mutableStateOf(CalendarViewType.MONTH) }
 
+    LaunchedEffect(deepLinkNonce, deepLinkEventDate) {
+        if (deepLinkNonce == null) return@LaunchedEffect
+        if (!deepLinkEventDate.isNullOrBlank()) {
+            try {
+                val d = LocalDate.parse(deepLinkEventDate)
+                eventsViewModel.selectDate(d)
+                eventsViewModel.selectMonth(YearMonth.from(d))
+                currentView = CalendarViewType.DAY
+            } catch (e: Exception) {
+                android.util.Log.w("CalendarScreen", "Deep link: zła data — ${e.message}")
+                currentView = CalendarViewType.DAY
+            }
+        } else {
+            currentView = CalendarViewType.DAY
+        }
+    }
+
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             CalendarTopBar(
                 currentView = currentView,
@@ -75,44 +111,94 @@ fun CalendarScreen(
             )
         }
     ) { paddingValues ->
-        Box(
+        AnimatedContent(
+            targetState = currentView,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            when (currentView) {
-                CalendarViewType.MONTH -> {
-                    MonthView(
-                        selectedMonth = selectedMonth,
-                        selectedDate = selectedDate,
-                        eventTypesPerDay = emptyMap(),
-                        onDateClick = { date ->
-                            eventsViewModel.selectDate(date)
-                        },
-                        modifier = Modifier.padding(horizontal = 8.dp),
-                        eventsViewModel = eventsViewModel,
-                        tasksViewModel = tasksViewModel,
-                        goalsViewModel = goalsViewModel  // ✅ CZY TO JEST?
-                    )
-                }
+                .padding(paddingValues),
+            transitionSpec = {
+                when {
+                    initialState == CalendarViewType.MONTH && targetState == CalendarViewType.WEEK -> {
+                        (expandVertically(animationSpec = ChronosMotion.tweenEnter()) + fadeIn(ChronosMotion.tweenEnter()))
+                            .togetherWith(
+                                shrinkVertically(animationSpec = ChronosMotion.tweenExit()) + fadeOut(ChronosMotion.tweenExit())
+                            )
+                    }
+                    initialState == CalendarViewType.WEEK && targetState == CalendarViewType.MONTH -> {
+                        (expandVertically(animationSpec = ChronosMotion.tweenEnter()) + fadeIn(ChronosMotion.tweenEnter()))
+                            .togetherWith(
+                                shrinkVertically(animationSpec = ChronosMotion.tweenExit()) + fadeOut(ChronosMotion.tweenExit())
+                            )
+                    }
+                    targetState == CalendarViewType.DAY -> {
+                        (slideInVertically(
+                            initialOffsetY = { it / 3 },
+                            animationSpec = ChronosMotion.tweenEnter()
+                        ) + scaleIn(initialScale = 0.97f, animationSpec = ChronosMotion.tweenEnter()) + fadeIn(ChronosMotion.tweenEnter()))
+                            .togetherWith(
+                                slideOutVertically(
+                                    targetOffsetY = { -it / 6 },
+                                    animationSpec = ChronosMotion.tweenExit()
+                                ) + fadeOut(ChronosMotion.tweenExit())
+                            )
+                    }
+                    initialState == CalendarViewType.DAY -> {
+                        (slideInVertically(
+                            initialOffsetY = { -it / 6 },
+                            animationSpec = ChronosMotion.tweenEnter()
+                        ) + fadeIn(ChronosMotion.tweenEnter()))
+                            .togetherWith(
+                                slideOutVertically(
+                                    targetOffsetY = { it / 3 },
+                                    animationSpec = ChronosMotion.tweenExit()
+                                ) + scaleOut(targetScale = 0.97f, animationSpec = ChronosMotion.tweenExit()) + fadeOut(ChronosMotion.tweenExit())
+                            )
+                    }
+                    else -> {
+                        fadeIn(ChronosMotion.tweenEnter()) togetherWith fadeOut(ChronosMotion.tweenExit())
+                    }
+                }.using(SizeTransform(clip = false))
+            },
+            label = "calendar_view_switch"
+        ) { view ->
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (view) {
+                    CalendarViewType.MONTH -> {
+                        MonthView(
+                            selectedMonth = selectedMonth,
+                            selectedDate = selectedDate,
+                            eventTypesPerDay = emptyMap(),
+                            onDateClick = { date ->
+                                eventsViewModel.selectDate(date)
+                            },
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            eventsViewModel = eventsViewModel,
+                            tasksViewModel = tasksViewModel,
+                            goalsViewModel = goalsViewModel
+                        )
+                    }
 
-                CalendarViewType.WEEK -> {
-                    CalendarWeekView(
-                        eventsViewModel = eventsViewModel,
-                        selectedDate = selectedDate
-                    )
-                }
+                    CalendarViewType.WEEK -> {
+                        CalendarWeekView(
+                            eventsViewModel = eventsViewModel,
+                            selectedDate = selectedDate
+                        )
+                    }
 
-                CalendarViewType.DAY -> {
-                    CalendarDayView(
-                        eventsViewModel = eventsViewModel,
-                        selectedDate = selectedDate,
-                        tasksViewModel = tasksViewModel,
-                        habitsViewModel = habitsViewModelLocal,
-                        goalsViewModel = goalsViewModel,
-                        onNavigateToGoal = onNavigateToGoal,
-                        onNavigateToSchedules = { onNavigateToSchedules(selectedDate.toString()) }  // ✅ DODAJ
-                    )
+                    CalendarViewType.DAY -> {
+                        CalendarDayView(
+                            eventsViewModel = eventsViewModel,
+                            selectedDate = selectedDate,
+                            tasksViewModel = tasksViewModel,
+                            habitsViewModel = habitsViewModelLocal,
+                            goalsViewModel = goalsViewModel,
+                            onNavigateToGoal = onNavigateToGoal,
+                            onNavigateToSchedules = { onNavigateToSchedules(selectedDate.toString()) },
+                            deepLinkOpenEventId = deepLinkEventId,
+                            deepLinkNonce = deepLinkNonce,
+                            onDeepLinkOpenConsumed = onCalendarDeepLinkHandled
+                        )
+                    }
                 }
             }
         }
@@ -221,18 +307,30 @@ fun ViewTypeButton(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
+    val scheme = MaterialTheme.colorScheme
+    val targetContainer =
+        if (isSelected) scheme.primary else scheme.surfaceVariant
+    val targetContent =
+        if (isSelected) scheme.onPrimary else scheme.onSurfaceVariant
+
+    val containerColor by animateColorAsState(
+        targetValue = targetContainer,
+        animationSpec = ChronosMotion.tweenEnter(),
+        label = "calendar_view_type_bg"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = targetContent,
+        animationSpec = ChronosMotion.tweenEnter(),
+        label = "calendar_view_type_fg"
+    )
+
     Button(
         onClick = onClick,
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (isSelected)
-                MaterialTheme.colorScheme.primary
-            else
-                MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = if (isSelected)
-                MaterialTheme.colorScheme.onPrimary
-            else
-                MaterialTheme.colorScheme.onSurfaceVariant
+            containerColor = containerColor,
+            contentColor = contentColor
         ),
+        shape = MaterialTheme.shapes.small,
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
     ) {
         Text(text, fontSize = 12.sp)

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.tasker.chronos.data.models.Achievement
 import com.tasker.chronos.data.models.Achievements
 import com.tasker.chronos.viewmodels.UserProfileViewModel
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -168,13 +170,28 @@ fun AchievementsScreen(
                 )
             }
 
-            items(Achievements.all) { achievement ->
+            itemsIndexed(Achievements.all) { index, achievement ->
                 val isUnlocked = unlockedIds.contains(achievement.id)
-                AchievementCard(
-                    achievement = achievement,
-                    isUnlocked = isUnlocked,
-                    currentPoints = totalPoints
-                )
+                var visible by remember(achievement.id) { mutableStateOf(false) }
+                LaunchedEffect(achievement.id) {
+                    delay(50L * index)
+                    visible = true
+                }
+
+                AnimatedVisibility(
+                    visible = visible,
+                    enter = slideInVertically(
+                        initialOffsetY = { it / 3 },
+                        animationSpec = tween(350)
+                    ) + fadeIn(animationSpec = tween(300)),
+                    exit = fadeOut(animationSpec = tween(150))
+                ) {
+                    AchievementCard(
+                        achievement = achievement,
+                        isUnlocked = isUnlocked,
+                        currentPoints = totalPoints
+                    )
+                }
             }
         }
     }

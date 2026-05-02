@@ -14,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +39,16 @@ fun AddHabitDialog(
     var hasReminder by remember { mutableStateOf(false) }
     var reminderTime by remember { mutableStateOf("09:00") }
     var showTimePicker by remember { mutableStateOf(false) }
+    var sheetEntered by remember { mutableStateOf(false) }
+    val sheetAppearProgress by animateFloatAsState(
+        targetValue = if (sheetEntered) 1f else 0.88f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "add_habit_sheet_appear"
+    )
+    LaunchedEffect(Unit) { sheetEntered = true }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -49,6 +60,11 @@ fun AddHabitDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
+                .graphicsLayer {
+                    scaleX = sheetAppearProgress
+                    scaleY = sheetAppearProgress
+                    translationY = (1f - sheetAppearProgress) * 220f
+                }
         ) {
             // === GRADIENT HEADER ===
             Box(

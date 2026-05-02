@@ -1,5 +1,7 @@
 package com.tasker.chronos.ui.screens
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,6 +47,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import com.tasker.chronos.ui.components.CHECKBOX_CHECKED
+import com.tasker.chronos.ui.components.CheckboxRichTextField
 import com.tasker.chronos.ui.components.CHECKBOX_UNCHECKED
 import com.tasker.chronos.ui.components.parseCheckboxes
 import com.tasker.chronos.ui.components.toggleCheckboxAtPosition
@@ -245,6 +249,7 @@ fun NotesScreen(
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun NoteItem(
     note: Note,
@@ -344,6 +349,7 @@ fun NoteItem(
 // ✅ HYBRYDOWY EDYTOR - FORMATOWANIE + KLIKALNE CHECKBOXY
 // ✅ PROSTY EDYTOR - CHECKBOX JAKO ZWYKŁY ZNAK
 // ✅ DZIAŁAJĄCA WERSJA - RICH TEXT EDITOR Z FORMATOWANIEM
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FullScreenNoteEditor(
@@ -359,13 +365,13 @@ fun FullScreenNoteEditor(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showCategoryPicker by remember { mutableStateOf(false) }
     var showFormattingToolbar by remember { mutableStateOf(false) }
-
     val richTextState = rememberRichTextState()
+    var editorFontSizeSp by remember { mutableStateOf(18f) }
+    val currentHtml = richTextState.toHtml()
+    val checkboxes = remember(currentHtml) { extractCheckboxesFromHtml(currentHtml) }
 
-    LaunchedEffect(note) {
-        if (note != null && note.content.isNotBlank()) {
-            richTextState.setHtml(note.content)
-        }
+    LaunchedEffect(note?.id) {
+        richTextState.setHtml(note?.content.orEmpty())
     }
 
     Scaffold(
@@ -420,20 +426,15 @@ fun FullScreenNoteEditor(
                     IconButton(
                         onClick = {
                             if (title.isNotBlank()) {
-                                val htmlContent = richTextState.toHtml()
-                                android.util.Log.d("NoteEditor", "Zapisuję: HTML length=${htmlContent.length}")
-
                                 onSave(
                                     note?.copy(
                                         title = title,
                                         content = richTextState.toHtml(),
                                         categoryId = selectedCategoryId,
-                                        //checkboxItems = checkboxStates // ✅ DODAJ
                                     ) ?: Note(
                                         title = title,
                                         content = richTextState.toHtml(),
                                         categoryId = selectedCategoryId,
-                                        //checkboxItems = checkboxStates // ✅ DODAJ
                                     )
                                 )
                             }
@@ -459,13 +460,40 @@ fun FullScreenNoteEditor(
         ) {
             // ✅ TOOLBAR Z FORMATOWANIEM
             AnimatedVisibility(visible = showFormattingToolbar) {
-                FormattingToolbar(
-                    state = richTextState,
-                    onInsertCheckbox = { checkboxId ->
-                        //checkboxStates = checkboxStates + (checkboxId to false)
-                        android.util.Log.d("NoteEditor", "Checkbox dodany: $checkboxId")
+                Column {
+                    RichEditorFormattingToolbar(
+                        state = richTextState,
+                        onInsertCheckbox = {
+                            val checkboxId = UUID.randomUUID().toString().take(8)
+                            val currentHtml = richTextState.toHtml()
+                            val checkboxHtml = "<p><span data-checkbox='$checkboxId'>☐</span> </p>"
+                            richTextState.setHtml(currentHtml + checkboxHtml)
+                        }
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { editorFontSizeSp = (editorFontSizeSp - 1f).coerceAtLeast(14f) }
+                        ) {
+                            Icon(Icons.Default.TextDecrease, contentDescription = "Zmniejsz czcionkę")
+                        }
+                        IconButton(
+                            onClick = { editorFontSizeSp = (editorFontSizeSp + 1f).coerceAtMost(30f) }
+                        ) {
+                            Icon(Icons.Default.TextIncrease, contentDescription = "Zwiększ czcionkę")
+                        }
+                        Text(
+                            text = "${editorFontSizeSp.toInt()}sp",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                )
+                }
             }
 
             if (selectedCategoryId != null) {
@@ -540,64 +568,73 @@ fun FullScreenNoteEditor(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
             )
 
-            // ✅ RICH TEXT EDITOR
-            // ✅ BOX Z EDYTOREM I CHECKBOXAMI
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
                     .padding(horizontal = 20.dp)
             ) {
-                // Rich Text Editor
-                RichTextEditor(
-                    state = richTextState,
-                    modifier = Modifier.fillMaxSize(),
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 28.sp
-                    ),
-                    placeholder = {
-                        Text(
-                            "Zacznij pisać...",
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                Column(modifier = Modifier.fillMaxSize()) {
+                    RichTextEditor(
+                        state = richTextState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(top = 12.dp),
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = editorFontSizeSp.sp,
+                            lineHeight = (editorFontSizeSp + 8f).sp,
+                            platformStyle = PlatformTextStyle(includeFontPadding = false)
+                        ),
+                        placeholder = {
+                            Text(
+                                "Zacznij pisać... Kliknij ikonę checkboxa, aby dodać zadanie",
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                                )
                             )
+                        },
+                        colors = RichTextEditorDefaults.richTextEditorColors(
+                            containerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
                         )
-                    },
-                    colors = RichTextEditorDefaults.richTextEditorColors(
-                        containerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent
                     )
-                )
 
-                // ✅ WARSTWA Z CHECKBOXAMI (overlay)
-//                CheckboxOverlay(
-//                    html = richTextState.toHtml(),
-//                    checkboxStates = checkboxStates,
-//                    onCheckboxToggle = { checkboxId ->
-//                        checkboxStates = checkboxStates.mapValues { (id, checked) ->
-//                            if (id == checkboxId) !checked else checked
-//                        }
-//
-//                        // Zaktualizuj HTML - zamień ☐ na ☑ lub odwrotnie
-//                        val currentHtml = richTextState.toHtml()
-//                        val isChecked = checkboxStates[checkboxId] ?: false
-//                        val newSymbol = if (isChecked) "☑" else "☐"
-//                        val oldSymbol = if (isChecked) "☐" else "☑"
-//
-//                        val newHtml = currentHtml.replace(
-//                            "data-checkbox='$checkboxId'>$oldSymbol",
-//                            "data-checkbox='$checkboxId'>$newSymbol"
-//                        )
-//                        richTextState.setHtml(newHtml)
-//
-//                        android.util.Log.d(
-//                            "NoteEditor",
-//                            "Checkbox $checkboxId przełączony: $isChecked"
-//                        )
-//                    }
-//                )
+                    if (checkboxes.isNotEmpty()) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 160.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(checkboxes, key = { it.id }) { item ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = item.isChecked,
+                                        onCheckedChange = {
+                                            val latestHtml = richTextState.toHtml()
+                                            richTextState.setHtml(toggleCheckboxInHtml(latestHtml, item.id))
+                                        }
+                                    )
+                                    Text(
+                                        text = "Checkbox ${item.id}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -696,6 +733,281 @@ fun FullScreenNoteEditor(
             }
         )
     }
+}
+
+private data class HtmlCheckboxItem(
+    val id: String,
+    val isChecked: Boolean
+)
+
+private fun extractCheckboxesFromHtml(html: String): List<HtmlCheckboxItem> {
+    val regex = Regex("""data-checkbox=['"]([^'"]+)['"]>(☐|☑)""")
+    return regex.findAll(html).map { match ->
+        HtmlCheckboxItem(
+            id = match.groupValues[1],
+            isChecked = match.groupValues[2] == "☑"
+        )
+    }.toList()
+}
+
+private fun toggleCheckboxInHtml(html: String, checkboxId: String): String {
+    val regex = Regex("""(data-checkbox=['"]$checkboxId['"]>)(☐|☑)""")
+    val match = regex.find(html) ?: return html
+    val symbol = match.groupValues[2]
+    val replacement = match.groupValues[1] + if (symbol == "☐") "☑" else "☐"
+    return html.replaceRange(match.range, replacement)
+}
+
+private fun insertCheckboxAtCursor(value: TextFieldValue): TextFieldValue {
+    val cursor = value.selection.start.coerceIn(0, value.text.length)
+    val prefix = value.text.substring(0, cursor)
+    val suffix = value.text.substring(cursor)
+    val needsNewLineBefore = prefix.isNotEmpty() && !prefix.endsWith("\n")
+    val insertText = (if (needsNewLineBefore) "\n" else "") + CHECKBOX_UNCHECKED
+    val newText = prefix + insertText + suffix
+    val newCursor = prefix.length + insertText.length
+    return TextFieldValue(
+        text = newText,
+        selection = TextRange(newCursor)
+    )
+}
+
+private fun htmlToPlainTextForEditing(raw: String): String {
+    if (raw.isBlank()) return raw
+    return raw
+        .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
+        .replace(Regex("</p>", RegexOption.IGNORE_CASE), "\n")
+        .replace(Regex("<[^>]*>"), "")
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .trim()
+}
+
+@Composable
+fun RichEditorFormattingToolbar(
+    state: com.mohamedrejeb.richeditor.model.RichTextState,
+    onInsertCheckbox: () -> Unit
+) {
+    val activeColor = MaterialTheme.colorScheme.primary
+    val inactiveColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val isBoldActive = state.currentSpanStyle.fontWeight == FontWeight.Bold
+    val isItalicActive = state.currentSpanStyle.fontStyle == androidx.compose.ui.text.font.FontStyle.Italic
+    val isUnderlineActive =
+        state.currentSpanStyle.textDecoration == androidx.compose.ui.text.style.TextDecoration.Underline
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 2.dp
+    ) {
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            item {
+                IconButton(
+                    onClick = {
+                        state.toggleSpanStyle(
+                            androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                ) {
+                    Icon(
+                        Icons.Default.FormatBold,
+                        contentDescription = "Pogrubienie",
+                        tint = if (isBoldActive) activeColor else inactiveColor
+                    )
+                }
+            }
+            item {
+                IconButton(
+                    onClick = {
+                        state.toggleSpanStyle(
+                            androidx.compose.ui.text.SpanStyle(
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                            )
+                        )
+                    }
+                ) {
+                    Icon(
+                        Icons.Default.FormatItalic,
+                        contentDescription = "Kursywa",
+                        tint = if (isItalicActive) activeColor else inactiveColor
+                    )
+                }
+            }
+            item {
+                IconButton(
+                    onClick = {
+                        state.toggleSpanStyle(
+                            androidx.compose.ui.text.SpanStyle(
+                                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                            )
+                        )
+                    }
+                ) {
+                    Icon(
+                        Icons.Default.FormatUnderlined,
+                        contentDescription = "Podkreślenie",
+                        tint = if (isUnderlineActive) activeColor else inactiveColor
+                    )
+                }
+            }
+            item {
+                IconButton(
+                    onClick = {
+                        if (state.isUnorderedList) {
+                            state.toggleUnorderedList()
+                        } else {
+                            if (state.isOrderedList) state.toggleOrderedList()
+                            state.toggleUnorderedList()
+                        }
+                    }
+                ) {
+                    Icon(
+                        Icons.Default.FormatListBulleted,
+                        contentDescription = "Lista punktowana",
+                        tint = if (state.isUnorderedList) activeColor else inactiveColor
+                    )
+                }
+            }
+            item {
+                IconButton(
+                    onClick = {
+                        if (state.isOrderedList) {
+                            state.toggleOrderedList()
+                        } else {
+                            if (state.isUnorderedList) state.toggleUnorderedList()
+                            state.toggleOrderedList()
+                        }
+                    }
+                ) {
+                    Icon(
+                        Icons.Default.FormatListNumbered,
+                        contentDescription = "Lista numerowana",
+                        tint = if (state.isOrderedList) activeColor else inactiveColor
+                    )
+                }
+            }
+            item {
+                IconButton(onClick = onInsertCheckbox) {
+                    Icon(
+                        Icons.Default.CheckBox,
+                        contentDescription = "Dodaj checkbox",
+                        tint = inactiveColor
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun applyWrapper(value: TextFieldValue, prefix: String, suffix: String): TextFieldValue {
+    val start = value.selection.start.coerceAtLeast(0)
+    val end = value.selection.end.coerceAtLeast(start)
+    val actualStart: Int
+    val actualEnd: Int
+
+    if (start == end) {
+        val wordStart = value.text.lastIndexOfAny(charArrayOf(' ', '\n', '\t'), start - 1).let { if (it == -1) 0 else it + 1 }
+        val wordEnd = value.text.indexOfAny(charArrayOf(' ', '\n', '\t'), start).let { if (it == -1) value.text.length else it }
+        if (wordStart < wordEnd) {
+            actualStart = wordStart
+            actualEnd = wordEnd
+        } else {
+            actualStart = start
+            actualEnd = end
+        }
+    } else {
+        actualStart = start
+        actualEnd = end
+    }
+
+    val selected = value.text.substring(actualStart, actualEnd)
+    val replaced = "$prefix$selected$suffix"
+    val newText = value.text.replaceRange(actualStart, actualEnd, replaced)
+    val newCursor = actualStart + replaced.length
+    return TextFieldValue(newText, TextRange(newCursor))
+}
+
+private fun applyUnorderedList(value: TextFieldValue): TextFieldValue {
+    val text = value.text
+    val start = value.selection.start.coerceAtLeast(0)
+    val end = value.selection.end.coerceAtLeast(start)
+    val lineStart = text.lastIndexOf('\n', maxOf(0, start - 1)).let { if (it == -1) 0 else it + 1 }
+    val lineEnd = text.indexOf('\n', maxOf(end, start)).let { if (it == -1) text.length else it }
+    val block = text.substring(lineStart, lineEnd)
+    val rawLines = block.split('\n')
+    val allBulleted = rawLines.all { it.startsWith("- ") || it.isBlank() }
+    val lines = rawLines.map { line ->
+        when {
+            line.isBlank() -> line
+            allBulleted && line.startsWith("- ") -> line.removePrefix("- ")
+            !allBulleted && !line.startsWith("- ") -> "- $line"
+            else -> line
+        }
+    }
+    val newBlock = lines.joinToString("\n")
+    val newText = text.replaceRange(lineStart, lineEnd, newBlock)
+    return TextFieldValue(newText, TextRange(lineStart + newBlock.length))
+}
+
+private fun applyOrderedList(value: TextFieldValue): TextFieldValue {
+    val text = value.text
+    val start = value.selection.start.coerceAtLeast(0)
+    val end = value.selection.end.coerceAtLeast(start)
+    val lineStart = text.lastIndexOf('\n', maxOf(0, start - 1)).let { if (it == -1) 0 else it + 1 }
+    val lineEnd = text.indexOf('\n', maxOf(end, start)).let { if (it == -1) text.length else it }
+    val block = text.substring(lineStart, lineEnd)
+    val rawLines = block.split('\n')
+    val allNumbered = rawLines.all { it.matches(Regex("^\\d+\\.\\s+.*")) || it.isBlank() }
+    val lines = if (allNumbered) {
+        rawLines.map { line ->
+            if (line.isBlank()) line else line.replace(Regex("^\\d+\\.\\s+"), "")
+        }
+    } else {
+        rawLines.mapIndexed { index, line ->
+            if (line.isBlank()) line else {
+                val cleaned = line.replace(Regex("^\\d+\\.\\s+"), "")
+                "${index + 1}. $cleaned"
+            }
+        }
+    }
+    val newBlock = lines.joinToString("\n")
+    val newText = text.replaceRange(lineStart, lineEnd, newBlock)
+    return TextFieldValue(newText, TextRange(lineStart + newBlock.length))
+}
+
+private fun handleAutoListContinuation(previous: TextFieldValue, current: TextFieldValue): TextFieldValue {
+    val prevText = previous.text
+    val curText = current.text
+    val curCursor = current.selection.start
+
+    if (curText.length != prevText.length + 1) return current
+    if (curCursor <= 0 || curCursor > curText.length) return current
+    if (curText[curCursor - 1] != '\n') return current
+
+    val insertedAt = curCursor - 1
+    val lineStart = prevText.lastIndexOf('\n', insertedAt - 1).let { if (it == -1) 0 else it + 1 }
+    val previousLine = prevText.substring(lineStart, insertedAt)
+
+    val prefix = when {
+        previousLine.startsWith("- ") -> "- "
+        previousLine.startsWith(CHECKBOX_UNCHECKED) || previousLine.startsWith(CHECKBOX_CHECKED) -> CHECKBOX_UNCHECKED
+        previousLine.matches(Regex("^\\d+\\.\\s+.*")) -> {
+            val number = Regex("^(\\d+)\\.").find(previousLine)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+            "${number + 1}. "
+        }
+        else -> null
+    } ?: return current
+
+    val newText = curText.substring(0, curCursor) + prefix + curText.substring(curCursor)
+    val newCursor = curCursor + prefix.length
+    return TextFieldValue(newText, TextRange(newCursor))
 }
 
 // ✅ TOOLBAR Z WSZYSTKIMI FUNKCJAMI

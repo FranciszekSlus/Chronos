@@ -86,4 +86,25 @@ data class Goal(
         return allCompleted
     }
 }
-//pozdroo
+
+/**
+ * Etykieta interwału przypomnienia cyklicznego — zgodna z [AddGoalDialog] / [EditGoalSheet].
+ */
+fun periodicReminderIntervalLabel(weeks: Int): String = when (weeks) {
+    1 -> "1 tydzień"
+    2 -> "2 tygodnie"
+    4 -> "1 miesiąc"
+    8 -> "2 miesiące"
+    12 -> "3 miesiące"
+    26 -> "6 miesięcy"
+    else -> "${weeks} tyg."
+}
+
+/**
+ * Krótki opis do listy celów: godzina + częstotliwość (gdy włączone przypomnienie cykliczne).
+ */
+fun Goal.periodicReminderSummary(): String? {
+    if (!hasPeriodicReminder) return null
+    val freq = periodicReminderIntervalLabel(reminderIntervalWeeks)
+    return "🔔 $reminderTime · $freq"
+}

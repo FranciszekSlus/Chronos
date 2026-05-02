@@ -1,97 +1,148 @@
-
 package com.tasker.chronos.ui.theme
-
 
 import android.app.Activity
 import android.os.Build
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.core.view.WindowCompat
 
-// ✅ Paleta kolorów dla Light Theme (Blue Wave)
 private val LightColorScheme = lightColorScheme(
-    primary = BluePrimary,              // #0272ED
-    onPrimary = Color.White,
-    primaryContainer = BluePrimaryContainer,
-    onPrimaryContainer = BlueOnPrimaryContainer,
+    primary = PastelPrimary,
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = PastelPrimaryContainer,
+    onPrimaryContainer = PastelOnPrimaryContainer,
 
-    secondary = BluePrimaryDark,        // #00695C (teal/navy)
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFFB2DFDB),
-    onSecondaryContainer = Color(0xFF00201B),
+    secondary = PastelSecondaryDark,
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = PastelSecondaryContainer,
+    onSecondaryContainer = PastelOnSecondaryContainer,
 
-    tertiary = GoalGold,                // Złoty dla celów
-    onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFFFE082),
-    onTertiaryContainer = Color(0xFF4A2800),
+    tertiary = PastelTertiary,
+    onTertiary = Color(0xFF1A3D36),
+    tertiaryContainer = PastelTertiaryContainer,
+    onTertiaryContainer = PastelOnTertiaryContainer,
 
-    error = PriorityHigh,               // Czerwony
-    onError = Color.White,
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005),
     errorContainer = Color(0xFFFFDAD6),
     onErrorContainer = Color(0xFF410002),
 
-    background = Color(0xFFFCFCFC),
-    onBackground = Color(0xFF1A1C1E),
+    background = Color.Transparent,
+    onBackground = Color(0xFF2A2D38),
 
-    surface = SurfaceLight,
-    onSurface = Color(0xFF1A1C1E),
-    surfaceVariant = Color(0xFFE1E2EC),
-    onSurfaceVariant = Color(0xFF44474E),
+    surface = Color(0xF2FFFFFF),
+    onSurface = Color(0xFF2A2D38),
+    surfaceVariant = Color(0xFFE8ECF5),
+    onSurfaceVariant = Color(0xFF5C6070),
 
-    outline = Color(0xFF74777F),
-    outlineVariant = Color(0xFFC4C6D0),
+    outline = Color(0xFFC8CCDA),
+    outlineVariant = Color(0xFFE0E3EE),
 )
 
-// ✅ Paleta kolorów dla Dark Theme (Blue Wave)
 private val DarkColorScheme = darkColorScheme(
-    primary = BluePrimaryLight,         // Jaśniejszy niebieski dla dark mode
-    onPrimary = Color(0xFF003258),
-    primaryContainer = Color(0xFF004A77),
-    onPrimaryContainer = Color(0xFFD0E8FF),
+    primary = PastelPrimaryLight,
+    onPrimary = Color(0xFF1A1F33),
+    primaryContainer = Color(0xFF3D4566),
+    onPrimaryContainer = Color(0xFFE8ECFF),
 
-    secondary = Color(0xFF80CBC4),      // Jaśniejszy teal dla dark mode
-    onSecondary = Color(0xFF00382F),
-    secondaryContainer = Color(0xFF005045),
-    onSecondaryContainer = Color(0xFFB2DFDB),
+    secondary = PastelSecondary,
+    onSecondary = Color(0xFF3D1F2A),
+    secondaryContainer = Color(0xFF5A3D4A),
+    onSecondaryContainer = Color(0xFFFFE4EE),
 
-    tertiary = Color(0xFFFFD54F),       // Jaśniejszy złoty dla dark mode
-    onTertiary = Color(0xFF4A2800),
-    tertiaryContainer = Color(0xFF6A3C00),
-    onTertiaryContainer = Color(0xFFFFE082),
+    tertiary = PastelTertiary,
+    onTertiary = Color(0xFF0D2620),
+    tertiaryContainer = Color(0xFF2A4A42),
+    onTertiaryContainer = Color(0xFFDFF7F0),
 
     error = Color(0xFFFFB4AB),
     onError = Color(0xFF690005),
     errorContainer = Color(0xFF93000A),
     onErrorContainer = Color(0xFFFFDAD6),
 
-    background = Color(0xFF1A1C1E),
-    onBackground = Color(0xFFE2E2E6),
+    background = Color.Transparent,
+    onBackground = Color(0xFFE8E6EF),
 
-    surface = SurfaceDark,
-    onSurface = Color(0xFFE2E2E6),
-    surfaceVariant = Color(0xFF44474E),
+    surface = Color(0xE6282C38),
+    onSurface = Color(0xFFE8E6EF),
+    surfaceVariant = Color(0xFF3A3F4D),
     onSurfaceVariant = Color(0xFFC4C6D0),
 
-    outline = Color(0xFF8E9099),
-    outlineVariant = Color(0xFF44474E),
+    outline = Color(0xFF6B7080),
+    outlineVariant = Color(0xFF454A58),
 )
 
-// ✅ POMOCNICZA FUNKCJA: Gradient Brush dla Blue Wave
-fun blueWaveGradient(): Brush {
+fun chronosAmbientBackgroundBrush(darkTheme: Boolean): Brush {
+    return if (darkTheme) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFF252A38),
+                Color(0xFF1C212E),
+                Color(0xFF161B24)
+            )
+        )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFFF5F3FF),
+                Color(0xFFFFF8FC),
+                Color(0xFFEFFAF6)
+            )
+        )
+    }
+}
+
+/** Gradient do przycisków / akcentów (pastelowy) */
+fun chronosAccentGradient(): Brush {
     return Brush.horizontalGradient(
-        colors = listOf(
-            Color(0xFF004AF3),  // ✅ Nowy start
-            Color(0xFF002C8F)    // ✅ Deep Indigo (Blue Twilight)
+        colors = listOf(PastelPrimary, PastelSecondaryDark, PastelTertiary)
+    )
+}
+
+/** Alias dla istniejących wywołań w UI */
+fun blueWaveGradient(): Brush = chronosAccentGradient()
+
+fun textWithBlueGlow(): TextStyle {
+    return TextStyle(
+        shadow = Shadow(
+            color = PastelPrimary.copy(alpha = 0.35f),
+            offset = Offset(0f, 2f),
+            blurRadius = 12f
+        )
+    )
+}
+
+fun textWithGreenGlow(): TextStyle {
+    return TextStyle(
+        shadow = Shadow(
+            color = Color(0xFF4CAF50).copy(alpha = 0.35f),
+            offset = Offset(0f, 2f),
+            blurRadius = 12f
+        )
+    )
+}
+
+fun textWithGoldGlow(): TextStyle {
+    return TextStyle(
+        shadow = Shadow(
+            color = Color(0xFFFFD700).copy(alpha = 0.35f),
+            offset = Offset(0f, 2f),
+            blurRadius = 12f
         )
     )
 }
@@ -99,13 +150,18 @@ fun blueWaveGradient(): Brush {
 @Composable
 fun ChronosTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false,  // Dynamic color dla Android 12+
+    /** Wyłączone domyślnie: Material You nadpisuje pastelową paletę na Androidzie 12+. */
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            val context = androidx.compose.ui.platform.LocalContext.current
+            if (darkTheme) {
+                androidx.compose.material3.dynamicDarkColorScheme(context)
+            } else {
+                androidx.compose.material3.dynamicLightColorScheme(context)
+            }
         }
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
@@ -123,52 +179,14 @@ fun ChronosTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
-        content = content
-    )
+        shapes = ChronosShapes,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(chronosAmbientBackgroundBrush(darkTheme))
+        ) {
+            content()
+        }
+    }
 }
-
-fun textWithBlueGlow(): TextStyle {
-    return TextStyle(
-        shadow = Shadow(
-            color = Color(0x4D0064FF),  // rgba(0, 100, 255, 0.3)
-            offset = Offset(0f, 2f),
-            blurRadius = 15f
-        )
-    )
-}
-
-// ═══════════════════════════════════════════════════════════════
-// PRZYKŁAD UŻYCIA GRADIENTU:
-
-// W FAB:
-// FloatingActionButton(
-//     onClick = { ... },
-//     containerColor = Color.Transparent,  // Ustaw transparent
-//     modifier = Modifier.background(
-//         brush = blueWaveGradient(),
-//         shape = CircleShape
-//     )
-// ) { ... }
-
-// W Button:
-// Button(
-//     onClick = { ... },
-//     colors = ButtonDefaults.buttonColors(
-//         containerColor = Color.Transparent
-//     ),
-//     modifier = Modifier.background(
-//         brush = blueWaveGradient(),
-//         shape = RoundedCornerShape(8.dp)
-//     )
-// ) { ... }
-
-// W Card:
-// Card(
-//     colors = CardDefaults.cardColors(
-//         containerColor = Color.Transparent
-//     ),
-//     modifier = Modifier.background(
-//         brush = blueWaveGradient(),
-//         shape = RoundedCornerShape(12.dp)
-//     )
-// ) { ... }

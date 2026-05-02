@@ -58,6 +58,10 @@
     import com.tasker.chronos.ui.components.AddCustomEventDialog
     import com.tasker.chronos.ui.components.EditCustomEventDialog
     import com.tasker.chronos.ui.components.EditTaskSheet
+    import com.tasker.chronos.ui.theme.GoalGold
+    import com.tasker.chronos.ui.theme.HabitGreen
+    import com.tasker.chronos.ui.theme.chronosAccentGradient
+    import com.tasker.chronos.ui.theme.textWithBlueGlow
     import com.tasker.chronos.viewmodels.EventsViewModel
     import com.tasker.chronos.viewmodels.GoalsViewModel
     import com.tasker.chronos.viewmodels.HabitsViewModel
@@ -65,7 +69,36 @@
     import kotlinx.coroutines.flow.MutableStateFlow
     import java.time.LocalDate
     import java.time.LocalTime
+    import java.time.format.DateTimeFormatter
     import kotlin.math.roundToInt
+
+    /**
+     * Zadanie z datą i godziną na siatce dnia — gdy nie ma już CustomEvent powiązanego (sourceTaskId).
+     */
+    private fun taskToGridCustomEvent(task: Task): CustomEvent {
+        val start = task.time ?: "09:00"
+        val end = try {
+            LocalTime.parse(start).plusHours(1).format(DateTimeFormatter.ofPattern("HH:mm"))
+        } catch (e: Exception) {
+            start
+        }
+        return CustomEvent(
+            id = "task_${task.id}",
+            title = task.title,
+            description = task.description,
+            date = task.date ?: "",
+            startTime = start,
+            endTime = end,
+            color = when (task.priority) {
+                TaskPriority.LOW -> 0xFF4CAF50L
+                TaskPriority.MEDIUM -> 0xFFFFC107L
+                TaskPriority.HIGH -> 0xFFF44336L
+            },
+            hasReminder = task.hasReminder,
+            reminderMinutesBefore = task.reminderMinutesBefore,
+            sourceTaskId = task.id
+        )
+    }
 
     @Composable
     fun CalendarDayView(
@@ -76,7 +109,10 @@
         goalsViewModel: GoalsViewModel? = null,
         onNavigateToGoal: (String) -> Unit = {},
         onGoalDialogDismissed: () -> Unit = {},
-        onNavigateToSchedules: () -> Unit = {}
+        onNavigateToSchedules: () -> Unit = {},
+        deepLinkOpenEventId: String? = null,
+        deepLinkNonce: Long? = null,
+        onDeepLinkOpenConsumed: () -> Unit = {}
 
     ) {
 
@@ -87,18 +123,21 @@
         val density = LocalDensity.current
         val allCustomEvents by eventsViewModel.customEvents.collectAsState()
 
-// ✅ 1. NAJPIERW pobierz zadania z datą na wybrany dzień
         val allTasksForDay = tasksViewModel.allTasks.collectAsState().value
             .filter { it.date == dateString && !it.isCompleted }
 
-// ✅ 2. Konwertuj zadania Z godziną na CustomEvent
-
-
-// ✅ 3. Połącz prawdziwe wydarzenia + zadania z godziną
         val customEvents = remember(allCustomEvents, selectedDate) {
             allCustomEvents.filter { event ->
                 event.occursOnDate(selectedDate.toString())
             }
+        }
+
+        val gridEvents = remember(customEvents, allTasksForDay) {
+            val linkedTaskIds = customEvents.mapNotNull { it.sourceTaskId }.toSet()
+            val fromTasksOnly = allTasksForDay
+                .filter { it.time != null && it.id !in linkedTaskIds }
+                .map { taskToGridCustomEvent(it) }
+            customEvents + fromTasksOnly
         }
 
 // ✅ 4. Inbox: zadania bez daty LUB z datą ale BEZ godziny
@@ -133,6 +172,20 @@
         var selectedTask by remember { mutableStateOf<Task?>(null) }
         var showEditTaskSheet by remember { mutableStateOf(false) }
         var selectedEvent by remember { mutableStateOf<CustomEvent?>(null) }
+        LaunchedEffect(deepLinkNonce, deepLinkOpenEventId, allCustomEvents, selectedDate) {
+            if (deepLinkNonce == null) return@LaunchedEffect
+            if (deepLinkOpenEventId.isNullOrBlank()) {
+                onDeepLinkOpenConsumed()
+                return@LaunchedEffect
+            }
+            if (allCustomEvents.isEmpty()) return@LaunchedEffect
+            val evt = allCustomEvents.find { it.id == deepLinkOpenEventId }
+            if (evt != null && evt.occursOnDate(selectedDate.toString())) {
+                selectedEvent = evt
+                showEditDialog = true
+            }
+            onDeepLinkOpenConsumed()
+        }
         val scrollState = rememberScrollState()
         var showInboxDrawer by remember { mutableStateOf(false) }
         var draggedTask by remember { mutableStateOf<Task?>(null) }
@@ -173,21 +226,27 @@
                             ),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
-                            style = TextStyle(
-                                shadow = Shadow(
-                                    color = Color(0x4D0064FF),
-                                    offset = Offset(0f, 2f),
-                                    blurRadius = 15f
-                                )
-                            )
+                            style = textWithBlueGlow()
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            // ✅ NOWY przycisk schematów
-                            IconButton(onClick = { onNavigateToSchedules() }) {
+                            FilledTonalButton(
+                                onClick = { onNavigateToSchedules() },
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                ),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.ViewDay,
                                     contentDescription = "Schematy dnia",
-                                    tint = MaterialTheme.colorScheme.primary
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Schematy",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
                         }
@@ -282,29 +341,11 @@
                             HourGridLines()
     
                             EventsLayer(
-                                events = customEvents,
+                                events = gridEvents,
                                 selectedDate = selectedDate,
                                 onEventClick = { event ->
-                                    android.util.Log.d("EventClick", "════════════════════════════════")
-                                    android.util.Log.d("EventClick", "📌 event.id = '${event.id}'")
-                                    android.util.Log.d("EventClick", "📌 event.title = '${event.title}'")
-                                    android.util.Log.d("EventClick", "📌 event.sourceTaskId = '${event.sourceTaskId}'")
-                                    android.util.Log.d("EventClick", "📌 startsWith('task_') = ${event.id.startsWith("task_")}")
-                                    android.util.Log.d("EventClick", "════════════════════════════════")
-
-                                    if (event.id.startsWith("task_") && event.sourceTaskId != null) {
-                                        android.util.Log.d("EventClick", "→ Otwieramy EditTaskSheet")
-                                        val originalTask = allTasksForDay.find { it.id == event.sourceTaskId }
-                                            ?: tasksViewModel.allTasks.value.find { it.id == event.sourceTaskId }
-                                        if (originalTask != null) {
-                                            selectedTask = originalTask
-                                            showEditTaskSheet = true
-                                        }
-                                    } else {
-                                        android.util.Log.d("EventClick", "→ Otwieramy EditCustomEventDialog")
-                                        selectedEvent = event
-                                        showEditDialog = true
-                                    }
+                                    selectedEvent = event
+                                    showEditDialog = true
                                 },
                                 onEventResizeEnd = { event, newStartMinutes, newEndMinutes ->
                                     val newStart = minutesToTime(newStartMinutes)
@@ -339,7 +380,7 @@
                                             sourceTaskId = task.id
                                         )
                                     )
-                                    // Usuń zadanie z inboxu - oznacz jako zaplanowane przez CustomEvent
+                                    tasksViewModel.assignDateToTask(task.id, selectedDate.toString(), startTime)
 
                                     draggedTask = null
                                 },
@@ -525,9 +566,9 @@
                                             sourceTaskId = taskToConvert.id
                                         )
                                     )
-                                    tasksViewModel.deleteTask(taskToConvert)  // ← usuń zadanie jak nawyk/mini-cel
+                                    tasksViewModel.assignDateToTask(taskToConvert.id, selectedDate.toString(), startTime)
 
-                                    android.util.Log.d("CalendarView", "✅ Zadanie '${taskToConvert.title}' zamienione na CustomEvent o $startTime")
+                                    android.util.Log.d("CalendarView", "✅ Zadanie '${taskToConvert.title}' zaplanowane na siatce; Task pozostaje na liście: $startTime")
                                     draggedTask = null
                                 }
                             }
@@ -608,11 +649,8 @@
                     colors = CardDefaults.cardColors(  // ✅ POPRAWKA: użyj colors zamiast containerColor
                         containerColor = when {
                             draggedTask != null -> draggedTask!!.priority.toColor().copy(alpha = 0.9f)
-                            draggedMiniGoal != null -> {
-                                // ✅ goal.color jest już typu Long, więc użyj bezpośrednio
-                                Color(0xFFFFD700).copy(alpha = 0.9f)
-                            }
-                            else -> Color(0xFF4CAF50).copy(alpha = 0.9f)
+                            draggedMiniGoal != null -> GoalGold.copy(alpha = 0.9f)
+                            else -> HabitGreen.copy(alpha = 0.9f)
                         }
                     )
                 )  {
@@ -1093,7 +1131,7 @@
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item {
                     Text(
@@ -1132,7 +1170,7 @@
 
                     if (tasksExpanded) {
                         items(tasks, key = { it.id }) { task ->
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
                             DraggableTaskCard(
                                 task = task,
                                 onDragStart = { position -> onTaskDragStart(task, position) },
@@ -1172,7 +1210,7 @@
 
                     if (habitsExpanded) {
                         items(habits, key = { it.id }) { habit ->
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
                             DraggableHabitCard(
                                 habit = habit,
                                 onDragStart = { position -> onHabitDragStart(habit, position) },
@@ -1212,7 +1250,7 @@
 
                     if (miniGoalsExpanded) {
                         items(miniGoals, key = { (_, miniGoal) -> miniGoal.id }) { (goal, miniGoal) ->
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
                             DraggableMiniGoalCard(
                                 goal = goal,
                                 miniGoal = miniGoal,
@@ -1261,6 +1299,7 @@
     ) {
         var isDragging by remember { mutableStateOf(false) }
         var cardPosition by remember { mutableStateOf(Offset.Zero) }
+        val cardColor = task.priority.toColor()
     
     
         Card(
@@ -1312,20 +1351,20 @@
                     )
                 },
             colors = CardDefaults.cardColors(
-                containerColor = task.priority.toColor().copy(alpha = 0.15f)
+                containerColor = cardColor.copy(alpha = 0.30f)
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(8.dp),
+                    .padding(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     Icons.Default.DragHandle,
                     contentDescription = "Przeciągnij",
-                    tint = task.priority.toColor(),
+                    tint = cardColor,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
@@ -1359,6 +1398,7 @@
     ) {
         var isDragging by remember { mutableStateOf(false) }
         var cardPosition by remember { mutableStateOf(Offset.Zero) }
+        val inboxGreen = HabitGreen
 
         Card(
             modifier = Modifier
@@ -1406,10 +1446,10 @@
                     )
                 },
             colors = CardDefaults.cardColors(
-                containerColor = Color(0xFF4CAF50).copy(alpha = 0.15f)
+                containerColor = inboxGreen.copy(alpha = 0.30f)
             ),
             elevation = CardDefaults.cardElevation(
-                defaultElevation = 1.dp
+                defaultElevation = 0.dp
             )
         ) {
             Row(
@@ -1421,7 +1461,7 @@
                 Icon(
                     Icons.Default.DragHandle,
                     contentDescription = "Przeciągnij",
-                    tint = Color(0xFF4CAF50),
+                    tint = inboxGreen,
                     modifier = Modifier.size(16.dp)
                 )
     
@@ -1444,7 +1484,7 @@
                             Text(
                                 text = "🔥${habit.streak}",
                                 fontSize = 9.sp,
-                                color = Color(0xFFFF6B35)
+                                color = MaterialTheme.colorScheme.secondary
                             )
                         }
     
@@ -1474,6 +1514,7 @@
     ) {
         var isDragging by remember { mutableStateOf(false) }
         var cardPosition by remember { mutableStateOf(Offset.Zero) }
+        val miniGoalColor = GoalGold
 
         Card(
             modifier = Modifier
@@ -1512,9 +1553,9 @@
                     )
                 },
             colors = CardDefaults.cardColors(
-                containerColor = Color(0xFFFFD700).copy(alpha = 0.15f)  // ✅ Złoty dla celów
+                containerColor = miniGoalColor.copy(alpha = 0.30f)
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -1525,7 +1566,7 @@
                 Icon(
                     Icons.Default.DragHandle,
                     contentDescription = "Przeciągnij",
-                    tint = Color(0xFFFFD700),
+                    tint = miniGoalColor,
                     modifier = Modifier.size(16.dp)
                 )
 
@@ -1551,7 +1592,7 @@
                         Text(
                             text = "📅 $date",
                             fontSize = 9.sp,
-                            color = Color(0xFFFFD700)
+                            color = miniGoalColor
                         )
                     }
                 }
@@ -1587,12 +1628,7 @@
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                Color(0xFFFFD700),
-                                Color(0xFFFFA500)
-                            )
-                        )
+                        brush = chronosAccentGradient()
                     )
                     .padding(12.dp)  // ✅ Zwiększ padding
             ) {

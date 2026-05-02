@@ -10,6 +10,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.tasker.chronos.data.models.Goal
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
@@ -41,6 +42,21 @@ class GoalsRepository(private val context: Context) {
                     emptyList()
                 }
             }
+        }
+    }
+
+    suspend fun getAllGoalsAsList(): List<Goal> {
+        return try {
+            val preferences = context.goalsDataStore.data.first()
+            val jsonString = preferences[GOALS_KEY]
+            if (jsonString.isNullOrBlank()) {
+                emptyList()
+            } else {
+                gson.fromJson(jsonString, goalListType)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("GoalsRepository", "❌ Błąd pobierania listy: ${e.message}", e)
+            emptyList()
         }
     }
 

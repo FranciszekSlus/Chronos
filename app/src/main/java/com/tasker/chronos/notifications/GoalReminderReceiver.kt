@@ -103,7 +103,11 @@ class GoalReminderReceiver : BroadcastReceiver() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
+            AlarmSchedulerCompat.scheduleWakeupAlarm(
+                alarmManager = alarmManager,
+                triggerAtMillis = calendar.timeInMillis,
+                pendingIntent = pendingIntent
+            )
             android.util.Log.d("GoalReminder", "🔄 Zaplanowano następne cykliczne: $nextDate")
         } catch (e: Exception) {
             android.util.Log.e("GoalReminder", "❌ Reschedule błąd: ${e.message}")
@@ -120,6 +124,8 @@ class GoalReminderReceiver : BroadcastReceiver() {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             putExtra("open_goal", goalId)
+            putExtra("item_type", "goal")
+            putExtra("item_id", goalId)
         }
 
         val pendingIntent = PendingIntent.getActivity(

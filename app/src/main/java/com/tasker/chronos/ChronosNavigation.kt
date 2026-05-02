@@ -1,16 +1,30 @@
 // Plik: navigation/ChronosNavigation.kt
 package com.tasker.chronos.navigation
 
-import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.foundation.background
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.tasker.chronos.ui.theme.ChronosMotion
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -48,6 +62,15 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object Settings : Screen("settings", "Ustawienia", Icons.Default.Settings)
 }
 
+private fun bottomNavOrder(route: String?): Int? {
+    return when (route) {
+        Screen.Home.route -> 0
+        Screen.Calendar.route -> 1
+        Screen.Settings.route -> 2
+        else -> null
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChronosNavigation(
@@ -60,32 +83,124 @@ fun ChronosNavigation(
     notesViewModel: NotesViewModel = viewModel(),  // ✅ NOWY
     shoppingViewModel: ShoppingViewModel = viewModel(),
     dayScheduleViewModel: DayScheduleViewModel = viewModel(),
-
+    notificationTarget: NotificationNavigationTarget? = null
     ) {
     val navController = rememberNavController()
     val items = listOf(Screen.Home, Screen.Calendar, Screen.Settings)
+    var pendingHomeTarget by remember { mutableStateOf<NotificationNavigationTarget?>(notificationTarget) }
+    var calendarDeepLink by remember {
+        mutableStateOf<Triple<String?, String?, Long>?>(null)
+    }
+    var lastHandledNonce by remember { mutableStateOf<Long?>(null) }
+
+    LaunchedEffect(notificationTarget?.nonce) {
+        val target = notificationTarget ?: return@LaunchedEffect
+        if (lastHandledNonce == target.nonce) return@LaunchedEffect
+        lastHandledNonce = target.nonce
+
+        if (target.openCalendar) {
+            pendingHomeTarget = null
+            calendarDeepLink = Triple(
+                target.calendarEventId,
+                target.calendarEventDate,
+                target.nonce
+            )
+            navController.navigate(Screen.Calendar.route) {
+                popUpTo(navController.graph.findStartDestination().id) {
+                    saveState = true
+                }
+                launchSingleTop = true
+                restoreState = true
+            }
+        } else {
+            calendarDeepLink = null
+            pendingHomeTarget = target
+            navController.navigate(Screen.Home.route) {
+                popUpTo(navController.graph.findStartDestination().id) {
+                    saveState = true
+                }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+    }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                tonalElevation = 2.dp
+            ) {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentDestination = navBackStackEntry?.destination
+                val selectedIndex = items.indexOfFirst { screen ->
+                    currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                }.coerceAtLeast(0)
+                val animatedSelectedIndex by animateFloatAsState(
+                    targetValue = selectedIndex.toFloat(),
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    ),
+                    label = "bottom_nav_pill_position"
+                )
 
-                items.forEach { screen ->
-                    NavigationBarItem(
-                        icon = { Icon(screen.icon, contentDescription = screen.title) },
-                        label = { Text(screen.title) },
-                        selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
-                        onClick = {
-                            navController.navigate(screen.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(72.dp)
+                ) {
+                    val tabWidth = maxWidth / items.size
+                    val animatedOffset = tabWidth * animatedSelectedIndex
+
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(horizontal = 8.dp)
+                            .width((tabWidth - 16.dp).coerceAtLeast(0.dp))
+                            .height(32.dp)
+                            .offset(x = animatedOffset)
+                            .background(
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
+                                shape = RoundedCornerShape(18.dp)
+                            )
+                    )
+
+                    Row(modifier = Modifier.fillMaxSize()) {
+                        items.forEach { screen ->
+                            val selected =
+                                currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxSize()
+                                    .clickable {
+                                        navController.navigate(screen.route) {
+                                            popUpTo(navController.graph.findStartDestination().id) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = screen.icon,
+                                    contentDescription = screen.title,
+                                    tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Text(
+                                    text = screen.title,
+                                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
                             }
                         }
-                    )
+                    }
                 }
             }
         }
@@ -93,7 +208,97 @@ fun ChronosNavigation(
         NavHost(
             navController = navController,
             startDestination = Screen.Home.route,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize(),
+            enterTransition = {
+                val from = bottomNavOrder(initialState.destination.route)
+                val to = bottomNavOrder(targetState.destination.route)
+                if (from != null && to != null) {
+                    if (to > from) {
+                        slideInHorizontally(
+                            initialOffsetX = { it },
+                            animationSpec = ChronosMotion.tweenEnter()
+                        ) + fadeIn(ChronosMotion.tweenEnter())
+                    } else {
+                        slideInHorizontally(
+                            initialOffsetX = { -it },
+                            animationSpec = ChronosMotion.tweenEnter()
+                        ) + fadeIn(ChronosMotion.tweenEnter())
+                    }
+                } else {
+                    fadeIn(ChronosMotion.tweenEnter()) + scaleIn(
+                        initialScale = 0.96f,
+                        animationSpec = ChronosMotion.tweenEnter()
+                    )
+                }
+            },
+            exitTransition = {
+                val from = bottomNavOrder(initialState.destination.route)
+                val to = bottomNavOrder(targetState.destination.route)
+                if (from != null && to != null) {
+                    if (to > from) {
+                        slideOutHorizontally(
+                            targetOffsetX = { -it },
+                            animationSpec = ChronosMotion.tweenExit()
+                        ) + fadeOut(ChronosMotion.tweenExit())
+                    } else {
+                        slideOutHorizontally(
+                            targetOffsetX = { it },
+                            animationSpec = ChronosMotion.tweenExit()
+                        ) + fadeOut(ChronosMotion.tweenExit())
+                    }
+                } else {
+                    fadeOut(ChronosMotion.tweenExit()) + scaleOut(
+                        targetScale = 1.02f,
+                        animationSpec = ChronosMotion.tweenExit()
+                    )
+                }
+            },
+            popEnterTransition = {
+                val from = bottomNavOrder(initialState.destination.route)
+                val to = bottomNavOrder(targetState.destination.route)
+                if (from != null && to != null) {
+                    if (to > from) {
+                        slideInHorizontally(
+                            initialOffsetX = { it },
+                            animationSpec = ChronosMotion.tweenEnter()
+                        ) + fadeIn(ChronosMotion.tweenEnter())
+                    } else {
+                        slideInHorizontally(
+                            initialOffsetX = { -it },
+                            animationSpec = ChronosMotion.tweenEnter()
+                        ) + fadeIn(ChronosMotion.tweenEnter())
+                    }
+                } else {
+                    fadeIn(ChronosMotion.tweenEnter()) + scaleIn(
+                        initialScale = 1.02f,
+                        animationSpec = ChronosMotion.tweenEnter()
+                    )
+                }
+            },
+            popExitTransition = {
+                val from = bottomNavOrder(initialState.destination.route)
+                val to = bottomNavOrder(targetState.destination.route)
+                if (from != null && to != null) {
+                    if (to > from) {
+                        slideOutHorizontally(
+                            targetOffsetX = { -it },
+                            animationSpec = ChronosMotion.tweenExit()
+                        ) + fadeOut(ChronosMotion.tweenExit())
+                    } else {
+                        slideOutHorizontally(
+                            targetOffsetX = { it },
+                            animationSpec = ChronosMotion.tweenExit()
+                        ) + fadeOut(ChronosMotion.tweenExit())
+                    }
+                } else {
+                    fadeOut(ChronosMotion.tweenExit()) + scaleOut(
+                        targetScale = 0.96f,
+                        animationSpec = ChronosMotion.tweenExit()
+                    )
+                }
+            }
         ) {
             // Podstawowa trasa Home (bez parametrów)
             // Podstawowa trasa Home
@@ -102,41 +307,10 @@ fun ChronosNavigation(
                     habitsViewModel = habitsViewModel,
                     tasksViewModel = tasksViewModel,
                     goalsViewModel = goalsViewModel,
-                    initialTab = 0,
-                    initialGoalId = null,
-                    onNavigateToNotes = {  // ✅ DODAJ
-                        navController.navigate("notes")
-                    },
-                    onNavigateToShopping = {  // ✅ DODAJ
-                        navController.navigate("shopping")
-                    }
-                )
-            }
-
-// Home z parametrami
-            composable(
-                route = "home/{tabIndex}/{goalId}",
-                arguments = listOf(
-                    navArgument("tabIndex") {
-                        type = NavType.IntType
-                        defaultValue = 0
-                    },
-                    navArgument("goalId") {
-                        type = NavType.StringType
-                        nullable = true
-                        defaultValue = null
-                    }
-                )
-            ) { backStackEntry ->
-                val tabIndex = backStackEntry.arguments?.getInt("tabIndex") ?: 0
-                val goalId = backStackEntry.arguments?.getString("goalId")
-
-                StartScreen(
-                    habitsViewModel = habitsViewModel,
-                    tasksViewModel = tasksViewModel,
-                    goalsViewModel = goalsViewModel,
-                    initialTab = tabIndex,
-                    initialGoalId = goalId,
+                    initialTab = pendingHomeTarget?.tabIndex ?: 0,
+                    initialGoalId = pendingHomeTarget?.goalId,
+                    initialTaskId = pendingHomeTarget?.taskId,
+                    initialHabitId = pendingHomeTarget?.habitId,
                     onNavigateToNotes = {  // ✅ DODAJ
                         navController.navigate("notes")
                     },
@@ -166,16 +340,26 @@ fun ChronosNavigation(
 
             composable(Screen.Calendar.route) {
                 val eventsViewModel: EventsViewModel = viewModel()
-                val tasksViewModel: TasksViewModel = viewModel()
                 val habitsViewModel: HabitsViewModel = viewModel()
                 val calendarViewModel: CalendarViewModel = viewModel()
                 val goalsViewModel: GoalsViewModel = viewModel()  // ✅ CZY TO JEST?
+                val link = calendarDeepLink
 
                 CalendarScreen(
                     calendarViewModel = calendarViewModel,
                     habitsViewModel = habitsViewModel,
+                    tasksViewModel = tasksViewModel,
+                    deepLinkEventId = link?.first,
+                    deepLinkEventDate = link?.second,
+                    deepLinkNonce = link?.third,
+                    onCalendarDeepLinkHandled = {
+                        if (calendarDeepLink?.third == link?.third) {
+                            calendarDeepLink = null
+                        }
+                    },
                     onNavigateToGoal = { goalId ->
-                        navController.navigate("home/2/$goalId") {
+                        pendingHomeTarget = NotificationNavigationTarget(tabIndex = 2, goalId = goalId)
+                        navController.navigate(Screen.Home.route) {
                             popUpTo(Screen.Home.route) {
                                 inclusive = false
                                 saveState = true

@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tasker.chronos.ui.theme.BluePrimary
 import com.tasker.chronos.ui.theme.BluePrimaryLight
+import com.tasker.chronos.ui.theme.PastelSecondaryDark
+import com.tasker.chronos.ui.theme.PastelTertiary
 
 @Composable
 fun LoadingScreen() {
@@ -52,8 +54,9 @@ fun LoadingScreen() {
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFF0A1929),  // Ciemny niebieski górny
-                        Color(0xFF1A237E)   // Blue Twilight dół
+                        Color(0xFFF5F3FF),
+                        Color(0xFFFFF5FB),
+                        Color(0xFFEFFAF6)
                     )
                 )
             ),
@@ -72,7 +75,7 @@ fun LoadingScreen() {
                 style = TextStyle(
                     fontSize = 36.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = Color(0xFF2A2D38),
                     shadow = Shadow(
                         color = BluePrimaryLight.copy(alpha = 0.7f),
                         offset = Offset(0f, 4f),
@@ -173,7 +176,7 @@ fun CircularWaveAnimation() {
         WaveCircle(
             progress = wave3,
             maxSize = 80.dp,
-            color = Color(0xFF1A237E).copy(alpha = 0.45f)
+            color = PastelSecondaryDark.copy(alpha = 0.35f)
         )
 
         // ✅ Centralny pulsujący punkt (rdzeń)
@@ -194,8 +197,8 @@ fun CircularWaveAnimation() {
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFF0272ED),  // BluePrimary
-                            Color(0xFF1A237E)   // Blue Twilight
+                            BluePrimaryLight,
+                            PastelTertiary
                         )
                     ),
                     shape = androidx.compose.foundation.shape.CircleShape

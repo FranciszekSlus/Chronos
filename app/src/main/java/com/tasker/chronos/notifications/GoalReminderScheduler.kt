@@ -90,10 +90,10 @@ object GoalReminderScheduler {
 
         // Nie planuj jeśli data już minęła
         if (calendar.timeInMillis > System.currentTimeMillis()) {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                calendar.timeInMillis,
-                pendingIntent
+            AlarmSchedulerCompat.scheduleWakeupAlarm(
+                alarmManager = alarmManager,
+                triggerAtMillis = calendar.timeInMillis,
+                pendingIntent = pendingIntent
             )
 
             android.util.Log.d(
@@ -190,10 +190,10 @@ object GoalReminderScheduler {
             )
 
             if (calendar.timeInMillis > System.currentTimeMillis()) {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    calendar.timeInMillis,
-                    pendingIntent
+                AlarmSchedulerCompat.scheduleWakeupAlarm(
+                    alarmManager = alarmManager,
+                    triggerAtMillis = calendar.timeInMillis,
+                    pendingIntent = pendingIntent
                 )
                 android.util.Log.d("GoalReminder", "✅ Cykliczne przypomnienie: ${goal.title} za ${goal.reminderIntervalWeeks} tyg ($nextDate)")
             }

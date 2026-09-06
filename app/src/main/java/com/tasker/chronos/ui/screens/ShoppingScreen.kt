@@ -40,11 +40,14 @@ fun ShoppingScreen(
     var selectedItem by remember { mutableStateOf<ShoppingItem?>(null) }
     var selectedCategoryFilter by remember { mutableStateOf<String?>(null) }
     var showOnlyUnpurchased by remember { mutableStateOf(true) }
+    var budgetText by remember { mutableStateOf("") }
+    var calcSelectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var calcMode by remember { mutableStateOf("filter") } // filter | selected | all
+    val budget = budgetText.toDoubleOrNull()
 
-    // Filtrowane przedmioty
     val filteredItems = remember(items, selectedCategoryFilter, showOnlyUnpurchased) {
         items.filter { item ->
-            val categoryMatch = selectedCategoryFilter == null || item.categoryId == selectedCategoryFilter
+            val categoryMatch = item.belongsToCategory(selectedCategoryFilter)
             val purchasedMatch = !showOnlyUnpurchased || !item.isPurchased
             categoryMatch && purchasedMatch
         }.sortedWith(
@@ -53,8 +56,16 @@ fun ShoppingScreen(
         )
     }
 
-    val totalPrice = shoppingViewModel.getTotalPrice()
+    val calcItems = remember(items, filteredItems, calcSelectedIds, calcMode, selectedCategoryFilter) {
+        when (calcMode) {
+            "selected" -> items.filter { it.id in calcSelectedIds && !it.isPurchased }
+            "filter" -> filteredItems.filter { !it.isPurchased }
+            else -> items.filter { !it.isPurchased }
+        }
+    }
+    val calcTotal = calcItems.sumOf { it.price }
     val purchasedTotal = shoppingViewModel.getPurchasedTotal()
+    val remaining = budget?.let { it - calcTotal }
 
     Scaffold(
         topBar = {
@@ -99,43 +110,117 @@ fun ShoppingScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Statystyki
+            // Statystyki + kalkulator budżetu
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column {
-                        Text(
-                            "Do kupienia:",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            "${String.format("%.2f", totalPrice)} zł",
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                "Do kupienia (kalkulator):",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            Text(
+                                "${String.format("%.2f", calcTotal)} zł",
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                            Text(
+                                when (calcMode) {
+                                    "selected" -> "Zaznaczone: ${calcItems.size} szt."
+                                    "filter" -> if (selectedCategoryFilter != null) "Wg filtra kategorii" else "Lista widoczna"
+                                    else -> "Wszystkie niekupione"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                "Zakupione:",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "${String.format("%.2f", purchasedTotal)} zł",
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF4CAF50)
+                                )
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = calcMode == "filter",
+                            onClick = { calcMode = "filter" },
+                            label = { Text("Filtr") }
+                        )
+                        FilterChip(
+                            selected = calcMode == "selected",
+                            onClick = { calcMode = "selected" },
+                            label = { Text("Zaznaczone") }
+                        )
+                        FilterChip(
+                            selected = calcMode == "all",
+                            onClick = { calcMode = "all" },
+                            label = { Text("Wszystkie") }
                         )
                     }
-                    Column(horizontalAlignment = Alignment.End) {
+
+                    if (calcMode == "selected") {
                         Text(
-                            "Zakupione:",
-                            style = MaterialTheme.typography.labelMedium,
+                            "Zaznacz produkty ikona kalkulatora na karcie.",
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        if (calcSelectedIds.isNotEmpty()) {
+                            TextButton(onClick = { calcSelectedIds = emptySet() }) {
+                                Text("Wyczysc zaznaczenie (${calcSelectedIds.size})")
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = budgetText,
+                        onValueChange = {
+                            if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d*$"))) {
+                                budgetText = it
+                            }
+                        },
+                        label = { Text("Moj budzet (ile mam pieniedzy)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        suffix = { Text("zl") },
+                        leadingIcon = { Icon(Icons.Default.Calculate, contentDescription = null) }
+                    )
+
+                    if (remaining != null) {
+                        val ok = remaining >= 0
                         Text(
-                            "${String.format("%.2f", purchasedTotal)} zł",
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF4CAF50)
-                            )
+                            text = if (ok)
+                                "Zostanie: ${String.format("%.2f", remaining)} zl"
+                            else
+                                "Brakuje: ${String.format("%.2f", -remaining)} zl",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = if (ok) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
                         )
                     }
                 }
@@ -179,7 +264,7 @@ fun ShoppingScreen(
                         }
 
                         items(categories, key = { it.id }) { category ->
-                            val count = items.count { it.categoryId == category.id }
+                            val count = items.count { it.belongsToCategory(category.id) }
                             FilterChip(
                                 selected = selectedCategoryFilter == category.id,
                                 onClick = { selectedCategoryFilter = category.id },
@@ -230,7 +315,18 @@ fun ShoppingScreen(
                     items(filteredItems, key = { it.id }) { item ->
                         ShoppingItemCard(
                             item = item,
-                            category = categories.find { it.id == item.categoryId },
+                            category = item.resolvedCategoryIds().mapNotNull { id ->
+                                categories.find { it.id == id }
+                            },
+                            selectedForCalc = item.id in calcSelectedIds,
+                            onToggleCalcSelected = {
+                                calcSelectedIds = if (item.id in calcSelectedIds) {
+                                    calcSelectedIds - item.id
+                                } else {
+                                    calcSelectedIds + item.id
+                                }
+                                calcMode = "selected"
+                            },
                             onClick = { selectedItem = item },
                             onTogglePurchased = { shoppingViewModel.togglePurchased(item.id) }
                         )
@@ -285,7 +381,9 @@ fun ShoppingScreen(
 @Composable
 fun ShoppingItemCard(
     item: ShoppingItem,
-    category: ShoppingCategory?,
+    category: List<ShoppingCategory>,
+    selectedForCalc: Boolean = false,
+    onToggleCalcSelected: () -> Unit = {},
     onClick: () -> Unit,
     onTogglePurchased: () -> Unit
 ) {
@@ -331,7 +429,7 @@ fun ShoppingItemCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${String.format("%.2f", item.price)} zł",
+                        text = "${String.format("%.2f", item.price)} zl",
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
                             color = if (item.isPurchased)
@@ -341,15 +439,15 @@ fun ShoppingItemCard(
                         )
                     )
 
-                    if (category != null) {
+                    category.forEach { cat ->
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = Color(android.graphics.Color.parseColor(category.color)).copy(alpha = 0.2f)
+                            color = Color(android.graphics.Color.parseColor(cat.color)).copy(alpha = 0.2f)
                         ) {
                             Text(
-                                text = category.name,
+                                text = cat.name,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color(android.graphics.Color.parseColor(category.color)),
+                                color = Color(android.graphics.Color.parseColor(cat.color)),
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                 fontWeight = FontWeight.Medium
                             )
@@ -360,11 +458,22 @@ fun ShoppingItemCard(
                 if (item.isPurchased && item.purchasedAt != null) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "✓ Kupiono: ${item.purchasedAt.format(DateTimeFormatter.ofPattern("dd.MM HH:mm"))}",
+                        text = "Kupiono: ${item.purchasedAt.format(DateTimeFormatter.ofPattern("dd.MM HH:mm"))}",
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF4CAF50)
                     )
                 }
+            }
+
+            IconButton(onClick = onToggleCalcSelected) {
+                Icon(
+                    Icons.Default.Calculate,
+                    contentDescription = "Do kalkulatora",
+                    tint = if (selectedForCalc)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                )
             }
         }
     }
@@ -378,7 +487,7 @@ fun AddShoppingItemDialog(
 ) {
     var name by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
-    var selectedCategoryId by remember { mutableStateOf<String?>(null) }
+    var selectedCategoryIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -396,7 +505,6 @@ fun AddShoppingItemDialog(
                 OutlinedTextField(
                     value = price,
                     onValueChange = {
-                        // Pozwól tylko na liczby i jedną kropkę
                         if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d*$"))) {
                             price = it
                         }
@@ -408,19 +516,19 @@ fun AddShoppingItemDialog(
                 )
 
                 if (categories.isNotEmpty()) {
-                    Text("Kategoria:", style = MaterialTheme.typography.labelMedium)
+                    Text("Kategorie (można wiele):", style = MaterialTheme.typography.labelMedium)
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        item {
-                            FilterChip(
-                                selected = selectedCategoryId == null,
-                                onClick = { selectedCategoryId = null },
-                                label = { Text("Brak") }
-                            )
-                        }
                         items(categories, key = { it.id }) { category ->
+                            val selected = category.id in selectedCategoryIds
                             FilterChip(
-                                selected = selectedCategoryId == category.id,
-                                onClick = { selectedCategoryId = category.id },
+                                selected = selected,
+                                onClick = {
+                                    selectedCategoryIds = if (selected) {
+                                        selectedCategoryIds - category.id
+                                    } else {
+                                        selectedCategoryIds + category.id
+                                    }
+                                },
                                 label = { Text(category.name) },
                                 leadingIcon = {
                                     Box(
@@ -440,11 +548,13 @@ fun AddShoppingItemDialog(
             TextButton(
                 onClick = {
                     if (name.isNotBlank()) {
+                        val ids = selectedCategoryIds.toList()
                         onConfirm(
                             ShoppingItem(
                                 name = name,
                                 price = price.toDoubleOrNull() ?: 0.0,
-                                categoryId = selectedCategoryId
+                                categoryId = ids.firstOrNull(),
+                                categoryIds = ids
                             )
                         )
                     }
@@ -472,7 +582,7 @@ fun EditShoppingItemDialog(
 ) {
     var name by remember { mutableStateOf(item.name) }
     var price by remember { mutableStateOf(item.price.toString()) }
-    var selectedCategoryId by remember { mutableStateOf(item.categoryId) }
+    var selectedCategoryIds by remember { mutableStateOf(item.resolvedCategoryIds().toSet()) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -502,19 +612,19 @@ fun EditShoppingItemDialog(
                 )
 
                 if (categories.isNotEmpty()) {
-                    Text("Kategoria:", style = MaterialTheme.typography.labelMedium)
+                    Text("Kategorie (można wiele):", style = MaterialTheme.typography.labelMedium)
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        item {
-                            FilterChip(
-                                selected = selectedCategoryId == null,
-                                onClick = { selectedCategoryId = null },
-                                label = { Text("Brak") }
-                            )
-                        }
                         items(categories, key = { it.id }) { category ->
+                            val selected = category.id in selectedCategoryIds
                             FilterChip(
-                                selected = selectedCategoryId == category.id,
-                                onClick = { selectedCategoryId = category.id },
+                                selected = selected,
+                                onClick = {
+                                    selectedCategoryIds = if (selected) {
+                                        selectedCategoryIds - category.id
+                                    } else {
+                                        selectedCategoryIds + category.id
+                                    }
+                                },
                                 label = { Text(category.name) },
                                 leadingIcon = {
                                     Box(
@@ -546,11 +656,13 @@ fun EditShoppingItemDialog(
             TextButton(
                 onClick = {
                     if (name.isNotBlank()) {
+                        val ids = selectedCategoryIds.toList()
                         onSave(
                             item.copy(
                                 name = name,
                                 price = price.toDoubleOrNull() ?: 0.0,
-                                categoryId = selectedCategoryId
+                                categoryId = ids.firstOrNull(),
+                                categoryIds = ids
                             )
                         )
                     }
@@ -570,20 +682,16 @@ fun EditShoppingItemDialog(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Usuń zakup?") },
-            text = { Text("Czy na pewno chcesz usunąć ten zakup? Tej operacji nie można cofnąć.") },
+            title = { Text("Usunąć zakup?") },
+            text = { Text("Tej operacji nie można cofnąć.") },
             confirmButton = {
                 TextButton(
                     onClick = onDelete,
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Usuń")
-                }
+                ) { Text("Usuń") }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Anuluj")
-                }
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Anuluj") }
             }
         )
     }

@@ -29,14 +29,27 @@ object TaskReminderScheduler {
         }
 
         val now = System.currentTimeMillis()
-        if (triggerTime <= now) {
-            android.util.Log.w("TaskReminderScheduler", "⚠️ Przypomnienie w przeszłości: ${task.title}")
-            return
+        // Jeśli wyliczony czas już minął, ale termin zadania jest w przyszłości — powiadom za ~15s
+        val taskEndMillis = try {
+            val d = LocalDate.parse(task.date)
+            val t = task.time?.let { LocalTime.parse(it) } ?: LocalTime.of(23, 59)
+            LocalDateTime.of(d, t).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        } catch (_: Exception) {
+            null
+        }
+
+        val effectiveTrigger = when {
+            triggerTime > now -> triggerTime
+            taskEndMillis != null && taskEndMillis > now -> now + 15_000L
+            else -> {
+                android.util.Log.w("TaskReminderScheduler", "⚠️ Przypomnienie w przeszłości: ${task.title}")
+                return
+            }
         }
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val intent = Intent(context, TaskReminderReceiver::class.java).apply {
-            putExtra("task_id", task.id) // ✅ POPRAWKA: Zmiana z TASK_ID na task_id
+            putExtra("task_id", task.id)
             putExtra("task_title", task.title)
             putExtra("task_description", task.description)
         }
@@ -50,17 +63,17 @@ object TaskReminderScheduler {
 
         AlarmSchedulerCompat.scheduleWakeupAlarm(
             alarmManager = alarmManager,
-            triggerAtMillis = triggerTime,
+            triggerAtMillis = effectiveTrigger,
             pendingIntent = pendingIntent
         )
 
         val triggerDateTime = LocalDateTime.ofInstant(
-            java.time.Instant.ofEpochMilli(triggerTime),
+            java.time.Instant.ofEpochMilli(effectiveTrigger),
             ZoneId.systemDefault()
         )
 
         android.util.Log.d("TaskReminderScheduler", "✅ Zaplanowano przypomnienie: ${task.title}")
-        android.util.Log.d("TaskReminderScheduler", "   Typ: ${task.reminderType}") // ✅ Bezpośrednie użycie
+        android.util.Log.d("TaskReminderScheduler", "   Typ: ${task.reminderType}")
         android.util.Log.d("TaskReminderScheduler", "   Czas: $triggerDateTime")
     }
 

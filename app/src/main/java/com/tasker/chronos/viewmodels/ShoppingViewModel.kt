@@ -81,9 +81,9 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
 
     fun deleteCategory(categoryId: String) {
         _categories.value = _categories.value.filter { it.id != categoryId }
-        _items.value = _items.value.map {
-            if (it.categoryId == categoryId) it.copy(categoryId = null)
-            else it
+        _items.value = _items.value.map { item ->
+            val ids = item.resolvedCategoryIds().filter { it != categoryId }
+            item.copy(categoryId = ids.firstOrNull(), categoryIds = ids)
         }
         saveData()
     }
@@ -94,5 +94,9 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
 
     fun getPurchasedTotal(): Double {
         return _items.value.filter { it.isPurchased }.sumOf { it.price }
+    }
+
+    fun remainingBudget(availableMoney: Double): Double {
+        return availableMoney - getTotalPrice()
     }
 }

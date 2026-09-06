@@ -1,4 +1,3 @@
-// Plik: data/repository/TasksRepository.kt
 package com.tasker.chronos.data.repository
 
 import android.content.Context
@@ -8,71 +7,46 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
 import com.tasker.chronos.data.models.Task
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 private val Context.tasksDataStore: DataStore<Preferences> by preferencesDataStore(name = "tasks")
 
-class TasksRepository(private val context: Context) {
+class TasksRepository(context: Context) {
 
+    private val appContext = context.applicationContext
     private val TASKS_KEY = stringPreferencesKey("tasks_list")
     private val ARCHIVED_TASKS_KEY = stringPreferencesKey("archived_tasks_list")
-    private val gson = Gson()
+    private val gson: Gson = GsonBuilder().create()
     private val taskListType = object : TypeToken<List<Task>>() {}.type
     private val mutex = Mutex()
 
-    /**
-     * Pobierz wszystkie aktywne zadania (nie ukończone)
-     */
     fun getAllTasks(): Flow<List<Task>> {
-        return context.tasksDataStore.data.map { preferences ->
-            val jsonString = preferences[TASKS_KEY]
-            if (jsonString.isNullOrBlank()) {
-                emptyList()
-            } else {
-                try {
-                    val tasks: List<Task> = gson.fromJson(jsonString, taskListType)
-                    tasks.filter { !it.isCompleted }
-                } catch (e: Exception) {
-                    android.util.Log.e("TasksRepository", "❌ Błąd deserializacji: ${e.message}")
-                    emptyList()
-                }
-            }
+        return appContext.tasksDataStore.data.map { preferences ->
+            parseTaskList(preferences[TASKS_KEY]).filter { !it.isCompleted }
         }
     }
 
-    suspend fun getAllTasksAsList(): List<Task> {
-        return try {
-            val preferences = context.tasksDataStore.data.first()
-            val jsonString = preferences[TASKS_KEY]
-            if (jsonString.isNullOrBlank()) {
-                emptyList()
-            } else {
-                gson.fromJson(jsonString, taskListType)
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("TasksRepository", "❌ Błąd pobierania listy: ${e.message}", e)
-            emptyList()
-        }
+    suspend fun getAllTasksAsList(): List<Task> = mutex.withLock {
+        val preferences = appContext.tasksDataStore.data.first()
+        parseTaskList(preferences[TASKS_KEY])
     }
 
-    /**
-     * Pobierz zadania z Inbox (bez daty)
-     */
+    suspend fun getArchivedTasksAsList(): List<Task> = mutex.withLock {
+        val preferences = appContext.tasksDataStore.data.first()
+        parseTaskList(preferences[ARCHIVED_TASKS_KEY])
+    }
+
     fun getInboxTasks(): Flow<List<Task>> {
-        return getAllTasks().map { tasks ->
-            tasks.filter { it.date == null }
-        }
+        return getAllTasks().map { tasks -> tasks.filter { it.date == null } }
     }
 
-    /**
-     * Pobierz zadania z datą
-     */
     fun getScheduledTasks(): Flow<List<Task>> {
         return getAllTasks().map { tasks ->
             tasks.filter { it.date != null }
@@ -84,140 +58,101 @@ class TasksRepository(private val context: Context) {
         }
     }
 
-    /**
-     * Pobierz archiwalne zadania (ukończone)
-     */
     fun getArchivedTasks(): Flow<List<Task>> {
-        return context.tasksDataStore.data.map { preferences ->
-            val jsonString = preferences[ARCHIVED_TASKS_KEY]
-            if (jsonString.isNullOrBlank()) {
-                emptyList()
-            } else {
+        return appContext.tasksDataStore.data.map { preferences ->
+            parseTaskList(preferences[ARCHIVED_TASKS_KEY])
+        }
+    }
+
+    private fun parseTaskList(json: String?): MutableList<Task> {
+        if (json.isNullOrBlank()) return mutableListOf()
+        return try {
+            val parsed: List<Task>? = gson.fromJson(json, taskListType)
+            parsed.orEmpty().mapNotNull { task ->
                 try {
-                    gson.fromJson(jsonString, taskListType)
-                } catch (e: Exception) {
-                    android.util.Log.e("TasksRepository", "❌ Błąd deserializacji archiwum: ${e.message}")
-                    emptyList()
+                    if (task.id.isBlank()) null else task
+                } catch (_: Exception) {
+                    null
                 }
-            }
+            }.toMutableList()
+        } catch (e: Exception) {
+            android.util.Log.e("TasksRepository", "❌ Błąd parsowania listy: ${e.message}", e)
+            mutableListOf()
         }
     }
 
     suspend fun addTask(task: Task) = mutex.withLock {
-        context.tasksDataStore.edit { preferences ->
-            val jsonString = preferences[TASKS_KEY]
-            val currentTasks = if (jsonString.isNullOrBlank()) {
-                mutableListOf()
-            } else {
-                gson.fromJson<MutableList<Task>>(jsonString, taskListType)
-            }
+        appContext.tasksDataStore.edit { preferences ->
+            val currentTasks = parseTaskList(preferences[TASKS_KEY])
+            currentTasks.removeAll { it.id == task.id }
             currentTasks.add(task)
             preferences[TASKS_KEY] = gson.toJson(currentTasks)
         }
+        android.util.Log.d("TasksRepository", "➕ Dodano: ${task.title} (${task.id})")
     }
 
     suspend fun updateTask(task: Task) = mutex.withLock {
-        try {
-            context.tasksDataStore.edit { preferences ->
-                val currentJsonString = preferences[TASKS_KEY] ?: ""
-                val archivedJsonString = preferences[ARCHIVED_TASKS_KEY] ?: ""
+        appContext.tasksDataStore.edit { preferences ->
+            val currentTasks = parseTaskList(preferences[TASKS_KEY])
+            val archivedTasks = parseTaskList(preferences[ARCHIVED_TASKS_KEY])
 
-                val currentTasks: MutableList<Task> = if (currentJsonString.isBlank()) {
-                    mutableListOf()
-                } else {
-                    try {
-                        gson.fromJson(currentJsonString, taskListType)
-                    } catch (e: Exception) {
-                        android.util.Log.e("TasksRepository", "❌ Błąd parsowania current: ${e.message}")
-                        mutableListOf()
+            val inCurrent = currentTasks.indexOfFirst { it.id == task.id }
+            val inArchived = archivedTasks.indexOfFirst { it.id == task.id }
+
+            when {
+                task.isCompleted -> {
+                    if (inCurrent >= 0) currentTasks.removeAt(inCurrent)
+                    archivedTasks.removeAll { it.id == task.id }
+                    archivedTasks.add(0, task)
+                }
+                else -> {
+                    if (inArchived >= 0) archivedTasks.removeAt(inArchived)
+                    if (inCurrent >= 0) {
+                        currentTasks[inCurrent] = task
+                    } else {
+                        currentTasks.add(task)
                     }
                 }
-
-                val archivedTasks: MutableList<Task> = if (archivedJsonString.isBlank()) {
-                    mutableListOf()
-                } else {
-                    try {
-                        gson.fromJson(archivedJsonString, taskListType)
-                    } catch (e: Exception) {
-                        android.util.Log.e("TasksRepository", "❌ Błąd parsowania archived: ${e.message}")
-                        mutableListOf()
-                    }
-                }
-
-                val indexInCurrent = currentTasks.indexOfFirst { it.id == task.id }
-                val indexInArchived = archivedTasks.indexOfFirst { it.id == task.id }
-
-                when {
-                    indexInCurrent != -1 -> {
-                        if (task.isCompleted) {
-                            currentTasks.removeAt(indexInCurrent)
-                            archivedTasks.add(0, task)
-                            android.util.Log.d("TasksRepository", "📦 Przeniesiono do archiwum: ${task.title}")
-                        } else {
-                            currentTasks[indexInCurrent] = task
-                            android.util.Log.d("TasksRepository", "✏️ Zaktualizowano: ${task.title}")
-                        }
-                    }
-
-                    indexInArchived != -1 -> {
-                        if (!task.isCompleted) {
-                            archivedTasks.removeAt(indexInArchived)
-                            currentTasks.add(task)
-                            android.util.Log.d("TasksRepository", "↩️ Przywrócono: ${task.title}")
-                        } else {
-                            archivedTasks[indexInArchived] = task
-                            android.util.Log.d("TasksRepository", "✏️ Zaktualizowano w archiwum: ${task.title}")
-                        }
-                    }
-
-                    else -> {
-                        android.util.Log.w("TasksRepository", "⚠️ Task nie znaleziony, dodaję jako nowy")
-                        if (task.isCompleted) {
-                            archivedTasks.add(0, task)
-                        } else {
-                            currentTasks.add(task)
-                        }
-                    }
-                }
-
-                preferences[TASKS_KEY] = gson.toJson(currentTasks)
-                preferences[ARCHIVED_TASKS_KEY] = gson.toJson(archivedTasks)
             }
-        } catch (e: Exception) {
-            android.util.Log.e("TasksRepository", "❌ Błąd updateTask: ${e.message}", e)
-            throw e
+
+            preferences[TASKS_KEY] = gson.toJson(currentTasks)
+            preferences[ARCHIVED_TASKS_KEY] = gson.toJson(archivedTasks)
+        }
+
+        val verify = appContext.tasksDataStore.data.first().let { prefs ->
+            parseTaskList(prefs[TASKS_KEY]).find { it.id == task.id }
+                ?: parseTaskList(prefs[ARCHIVED_TASKS_KEY]).find { it.id == task.id }
+        }
+        android.util.Log.d(
+            "TasksRepository",
+            "✏️ Update verify id=${task.id} savedTitle=${verify?.title} expected=${task.title} ok=${verify?.title == task.title}"
+        )
+        if (verify?.title != task.title) {
+            throw IllegalStateException("Task update did not persist for id=${task.id}")
+        }
+    }
+
+    suspend fun replaceActiveAndArchived(active: List<Task>, archived: List<Task>) = mutex.withLock {
+        appContext.tasksDataStore.edit { preferences ->
+            preferences[TASKS_KEY] = gson.toJson(active)
+            preferences[ARCHIVED_TASKS_KEY] = gson.toJson(archived)
         }
     }
 
     suspend fun deleteTask(taskId: String) = mutex.withLock {
-        context.tasksDataStore.edit { preferences ->
-            val currentJsonString = preferences[TASKS_KEY]
-            val archivedJsonString = preferences[ARCHIVED_TASKS_KEY]
-
-            if (currentJsonString != null) {
-                val currentTasks: MutableList<Task> = gson.fromJson(currentJsonString, taskListType)
-                val wasRemoved = currentTasks.removeAll { it.id == taskId }
-                if (wasRemoved) {
-                    preferences[TASKS_KEY] = gson.toJson(currentTasks)
-                    android.util.Log.d("TasksRepository", "🗑️ Usunięto z aktywnych")
-                }
-            }
-
-            if (archivedJsonString != null) {
-                val archivedTasks: MutableList<Task> = gson.fromJson(archivedJsonString, taskListType)
-                val wasRemoved = archivedTasks.removeAll { it.id == taskId }
-                if (wasRemoved) {
-                    preferences[ARCHIVED_TASKS_KEY] = gson.toJson(archivedTasks)
-                    android.util.Log.d("TasksRepository", "🗑️ Usunięto z archiwum")
-                }
-            }
+        appContext.tasksDataStore.edit { preferences ->
+            val currentTasks = parseTaskList(preferences[TASKS_KEY])
+            val archivedTasks = parseTaskList(preferences[ARCHIVED_TASKS_KEY])
+            currentTasks.removeAll { it.id == taskId }
+            archivedTasks.removeAll { it.id == taskId }
+            preferences[TASKS_KEY] = gson.toJson(currentTasks)
+            preferences[ARCHIVED_TASKS_KEY] = gson.toJson(archivedTasks)
         }
     }
 
     suspend fun clearArchive() = mutex.withLock {
-        context.tasksDataStore.edit { preferences ->
+        appContext.tasksDataStore.edit { preferences ->
             preferences.remove(ARCHIVED_TASKS_KEY)
-            android.util.Log.d("TasksRepository", "🗑️ Wyczyszczono archiwum")
         }
     }
 }

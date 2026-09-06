@@ -109,52 +109,25 @@ fun StartScreen(
     var completionType by remember { mutableStateOf(CompletionType.GOAL) }
     var showCompletionToast by remember { mutableStateOf(false) }
 
-    // ✅ Przełącz na tab Cele jeśli przekazano goalId
+    // Powiadomienia: tylko zakładka Home (bez auto-otwierania edycji)
     LaunchedEffect(initialGoalId) {
         if (initialGoalId != null) {
             selectedTab = 2
-        }
-    }
-    var hasHandledInitialGoal by remember { mutableStateOf(false) }
-
-    LaunchedEffect(initialGoalId) {  // ✅ USUŃ filteredGoals z dependency!
-        if (initialGoalId != null && !hasHandledInitialGoal) {
-            selectedTab = 2
-
-            // Poczekaj aż filteredGoals będzie gotowy
-            val goal = filteredGoals.find { it.id == initialGoalId }
-            if (goal != null) {
-                selectedGoal = goal
-                hasHandledInitialGoal = true  // ✅ Oznacz jako obsłużone
-                android.util.Log.d("StartScreen", "✅ Otwarto EditGoalSheet dla: ${goal.title} (z deadline)")
-            }
+            android.util.Log.d("StartScreen", "Powiadomienie → zakładka Cele")
         }
     }
 
-    var hasHandledInitialTask by remember { mutableStateOf(false) }
-    LaunchedEffect(initialTaskId, filteredScheduledTasks, filteredInboxTasks) {
-        if (initialTaskId.isNullOrBlank() || hasHandledInitialTask) return@LaunchedEffect
-        selectedTab = 0
-        val task = filteredScheduledTasks.find { it.id == initialTaskId }
-            ?: filteredInboxTasks.find { it.id == initialTaskId }
-        if (task != null) {
-            selectedTask = task
-            showEditTaskSheet = true
-            hasHandledInitialTask = true
-            android.util.Log.d("StartScreen", "✅ Otwarto zadanie z powiadomienia: ${task.title}")
+    LaunchedEffect(initialTaskId) {
+        if (!initialTaskId.isNullOrBlank()) {
+            selectedTab = 0
+            android.util.Log.d("StartScreen", "Powiadomienie → zakładka Zadania")
         }
     }
 
-    var hasHandledInitialHabit by remember { mutableStateOf(false) }
-    LaunchedEffect(initialHabitId, filteredHabits) {
-        if (initialHabitId.isNullOrBlank() || hasHandledInitialHabit) return@LaunchedEffect
-        selectedTab = 1
-        val habit = filteredHabits.find { it.id == initialHabitId }
-        if (habit != null) {
-            selectedHabit = habit
-            showEditHabitSheet = true
-            hasHandledInitialHabit = true
-            android.util.Log.d("StartScreen", "✅ Otwarto nawyk z powiadomienia: ${habit.name}")
+    LaunchedEffect(initialHabitId) {
+        if (!initialHabitId.isNullOrBlank()) {
+            selectedTab = 1
+            android.util.Log.d("StartScreen", "Powiadomienie → zakładka Nawyki")
         }
     }
     // ✅ DODAJ NOWY LaunchedEffect - tuż PRZED istniejącym LaunchedEffect(initialGoalId)
@@ -368,7 +341,7 @@ fun StartScreen(
                             allTasks = allActiveTasks.applyFilters(taskFilters),
                             filters = taskFilters,
                             onTaskClick = { task ->
-                                selectedTask = task
+                                selectedTask = tasksViewModel.findTask(task.id) ?: task
                                 showEditTaskSheet = true
                             },
                             onTaskCheckedChange = { taskId ->
@@ -484,27 +457,32 @@ fun StartScreen(
         )
     }
 
-    AnimatedSheetHost(visible = showEditTaskSheet && selectedTask != null) {
-        EditTaskSheet(
-            task = selectedTask!!,
-            onDismiss = {
-                showEditTaskSheet = false
-                selectedTask = null
-            },
-            onSave = { updatedTask ->
-                tasksViewModel.updateTask(updatedTask)
-                showEditTaskSheet = false
-                selectedTask = null
-            },
-            onDelete = { taskToDelete ->
-                tasksViewModel.deleteTask(taskToDelete)
-                showEditTaskSheet = false
-                selectedTask = null
-            }
-        )
+    // ModalBottomSheet ma własną animację — AnimatedSheetHost powodował
+    // zamykanie arkusza przy otwarciu klawiatury (IME resize).
+    if (showEditTaskSheet && selectedTask != null) {
+        val editing = selectedTask!!
+        key(editing.id, editing.title, editing.description, editing.date, editing.time) {
+            EditTaskSheet(
+                task = editing,
+                onDismiss = {
+                    showEditTaskSheet = false
+                    selectedTask = null
+                },
+                onSave = { updatedTask ->
+                    tasksViewModel.updateTask(updatedTask)
+                    showEditTaskSheet = false
+                    selectedTask = null
+                },
+                onDelete = { taskToDelete ->
+                    tasksViewModel.deleteTask(taskToDelete)
+                    showEditTaskSheet = false
+                    selectedTask = null
+                }
+            )
+        }
     }
 
-    AnimatedSheetHost(visible = showEditHabitSheet && selectedHabit != null) {
+    if (showEditHabitSheet && selectedHabit != null) {
         EditHabitSheet(
             habit = selectedHabit!!,
             onDismiss = {
@@ -817,7 +795,7 @@ fun HabitItem(
     SwipeToDismissBox(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 100.dp),
+            .height(112.dp),
         state = rememberSwipeToDismissBoxState(
             confirmValueChange = { value ->
                 when (value) {
@@ -850,13 +828,17 @@ fun HabitItem(
         enableDismissFromEndToStart = true
     ) {
         Box {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
+                Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(112.dp),
                 onClick = onHabitClick,
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = if (isCompletedToday)
                         Color(0xFF4CAF50).copy(alpha = 0.12f)
+                    else if (!isActiveToday)
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
                     else
                         MaterialTheme.colorScheme.surface
                 ),
@@ -891,45 +873,47 @@ fun HabitItem(
                     Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = habit.name,
-                    style = MaterialTheme.typography.titleMedium.copy( // ✅ titleMedium
+                    style = MaterialTheme.typography.titleMedium.copy(
                         textDecoration = if (isCompletedToday)
                             androidx.compose.ui.text.style.TextDecoration.LineThrough
                         else null,
-                        fontWeight = FontWeight.SemiBold // ✅ Pogrubienie
+                        fontWeight = FontWeight.SemiBold
                     ),
                     color = if (isCompletedToday)
                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     else
-                        MaterialTheme.colorScheme.onSurface
+                        MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1
                 )
 
-                Spacer(modifier = Modifier.height(8.dp)) // ✅ Większy odstęp
+                Spacer(modifier = Modifier.height(8.dp))
 
-                // Szczegóły w boxach
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Typ częstotliwości
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF4CAF50).copy(alpha = 0.15f)
+                        color = if (!isActiveToday)
+                            Color.Red.copy(alpha = 0.12f)
+                        else
+                            Color(0xFF4CAF50).copy(alpha = 0.15f)
                     ) {
                         Text(
                             text = when {
+                                !isActiveToday -> "💤 Nie dziś"
                                 habit.weeklyDays.isNotEmpty() -> "📅 Tygodniowo"
                                 habit.monthlyDates.isNotEmpty() -> "📆 Miesięcznie"
                                 else -> "🔄 Codziennie"
                             },
-                            style = MaterialTheme.typography.labelMedium, // ✅ labelMedium
+                            style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                            color = Color(0xFF4CAF50),
+                            color = if (!isActiveToday) Color.Red.copy(alpha = 0.8f) else Color(0xFF4CAF50),
                             fontWeight = FontWeight.SemiBold
                         )
                     }
 
-                    // Streak
                     if (habit.streak > 0) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
@@ -945,7 +929,6 @@ fun HabitItem(
                         }
                     }
 
-                    // Przypomnienie
                     if (habit.hasReminder && habit.reminderTime != null) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
@@ -960,27 +943,15 @@ fun HabitItem(
                             )
                         }
                     }
-                }
 
-                // Punkty
-                if (habit.points > 0) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "⭐ +${habit.points} pkt",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color(0xFFFFD700),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // Status nieaktywny
-                if (!isActiveToday) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "💤 Nieaktywny dzisiaj",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.Red.copy(alpha = 0.7f)
-                    )
+                    if (habit.points > 0) {
+                        Text(
+                            text = "⭐ +${habit.points}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color(0xFFFFD700),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
                     }
                 }

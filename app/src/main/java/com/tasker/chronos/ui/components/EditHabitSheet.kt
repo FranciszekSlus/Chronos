@@ -1,8 +1,11 @@
 // Plik: ui/components/EditHabitSheet.kt
 package com.tasker.chronos.ui.components
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -25,10 +28,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tasker.chronos.data.models.Habit
 import com.tasker.chronos.data.models.HabitFrequency
-import kotlinx.coroutines.delay
 import java.time.LocalTime
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun EditHabitSheet(
     habit: Habit,
@@ -36,8 +38,8 @@ fun EditHabitSheet(
     onSave: (Habit) -> Unit,
     onDelete: (Habit) -> Unit
 ) {
-    var name by remember { mutableStateOf(habit.name) }
-    var selectedFrequency by remember {
+    var name by remember(habit.id) { mutableStateOf(habit.name) }
+    var selectedFrequency by remember(habit.id) {
         mutableStateOf(
             when {
                 habit.weeklyDays.isNotEmpty() -> HabitFrequency.TYGODNIOWY
@@ -46,35 +48,29 @@ fun EditHabitSheet(
             }
         )
     }
-    var selectedWeekDays by remember { mutableStateOf(habit.weeklyDays.toSet()) }
-    var selectedMonthDays by remember { mutableStateOf(habit.monthlyDates.mapNotNull { it.toIntOrNull() }.toSet()) }
-    var hasReminder by remember { mutableStateOf(habit.hasReminder) }
-    var reminderTime by remember { mutableStateOf(habit.reminderTime ?: "09:00") }
+    var selectedWeekDays by remember(habit.id) { mutableStateOf(habit.weeklyDays.toSet()) }
+    var selectedMonthDays by remember(habit.id) { mutableStateOf(habit.monthlyDates.mapNotNull { it.toIntOrNull() }.toSet()) }
+    var hasReminder by remember(habit.id) { mutableStateOf(habit.hasReminder) }
+    var reminderTime by remember(habit.id) { mutableStateOf(habit.reminderTime ?: "09:00") }
 
     var showTimePicker by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(50)
-        visible = true
-    }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val imeVisible = WindowInsets.isImeVisible
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        onDismissRequest = {
+            if (!imeVisible) onDismiss()
+        },
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(animationSpec = tween(300)) + slideInVertically(
-                animationSpec = tween(400, easing = EaseOutCubic)
-            )
-        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .imePadding()
                     .padding(horizontal = 24.dp)
                     .padding(bottom = 32.dp)
                     .verticalScroll(rememberScrollState())
@@ -319,7 +315,6 @@ fun EditHabitSheet(
                     }
                 }
             }
-        }
     }
 
     if (showTimePicker) {

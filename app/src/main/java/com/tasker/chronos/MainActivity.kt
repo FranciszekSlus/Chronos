@@ -19,6 +19,7 @@ import com.tasker.chronos.navigation.ChronosNavigation
 import com.tasker.chronos.ui.screens.LoadingScreen
 import com.tasker.chronos.ui.theme.ChronosTheme
 import com.tasker.chronos.workers.HabitResetWorker
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val notificationTargetState = mutableStateOf<NotificationNavigationTarget?>(null)
@@ -88,6 +89,11 @@ class MainActivity : ComponentActivity() {
     private fun initializeNotifications() {
         try {
             HabitResetWorker.scheduleMidnightReset(this)
+            com.tasker.chronos.workers.ReminderHealthCheckWorker.schedule(this)
+            // Przywróć alarmy przy starcie (na wypadek utraty po killu procesu)
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                com.tasker.chronos.notifications.ReminderRescheduler.rescheduleAll(this@MainActivity)
+            }
             android.util.Log.d("MainActivity", "✅ Powiadomienia zainicjalizowane")
         } catch (e: Exception) {
             android.util.Log.e("MainActivity", "❌ Błąd inicjalizacji: ${e.message}", e)

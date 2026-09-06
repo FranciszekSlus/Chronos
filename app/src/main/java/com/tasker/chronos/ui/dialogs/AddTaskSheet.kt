@@ -30,7 +30,7 @@ import com.tasker.chronos.ui.theme.*
 import java.time.LocalDate
 import java.time.LocalTime
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AddTaskDialog(
     onDismiss: () -> Unit,
@@ -64,8 +64,13 @@ fun AddTaskDialog(
     )
     LaunchedEffect(Unit) { sheetEntered = true }
 
+    val imeVisible = WindowInsets.isImeVisible
+    val pickerOpen = showDatePicker || showTimePicker || showReminderTimePicker
+
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            if (!imeVisible && !pickerOpen) onDismiss()
+        },
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
         dragHandle = { BottomSheetDefaults.DragHandle() }
@@ -441,13 +446,7 @@ fun AddTaskDialog(
     // DatePicker Dialog
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = selectedDate?.let {
-                try {
-                    LocalDate.parse(it).toEpochDay() * 24 * 60 * 60 * 1000
-                } catch (e: Exception) {
-                    System.currentTimeMillis()
-                }
-            } ?: System.currentTimeMillis()
+            initialSelectedDateMillis = com.tasker.chronos.utils.DateMillis.parseToUtcMillisOrNow(selectedDate)
         )
 
         DatePickerDialog(
@@ -456,7 +455,9 @@ fun AddTaskDialog(
                 TextButton(
                     onClick = {
                         datePickerState.selectedDateMillis?.let { millis ->
-                            selectedDate = LocalDate.ofEpochDay(millis / (24 * 60 * 60 * 1000)).toString()
+                            selectedDate = com.tasker.chronos.utils.DateMillis
+                                .utcMillisToLocalDate(millis)
+                                .toString()
                         }
                         showDatePicker = false
                     }

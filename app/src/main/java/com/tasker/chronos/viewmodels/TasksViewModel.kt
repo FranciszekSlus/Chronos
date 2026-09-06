@@ -1,162 +1,138 @@
-    // Plik: viewmodels/TasksViewModel.kt
-    package com.tasker.chronos.viewmodels
+package com.tasker.chronos.viewmodels
 
-    import android.app.Application
-    import androidx.lifecycle.AndroidViewModel
-    import androidx.lifecycle.viewModelScope
-    import com.tasker.chronos.data.models.Task
-    import com.tasker.chronos.data.repository.TasksRepository
-    import com.tasker.chronos.notifications.TaskReminderScheduler
-    import kotlinx.coroutines.Dispatchers
-    import kotlinx.coroutines.flow.SharingStarted
-    import kotlinx.coroutines.flow.StateFlow
-    import kotlinx.coroutines.flow.first
-    import kotlinx.coroutines.flow.stateIn
-    import kotlinx.coroutines.launch
-    import java.time.LocalDateTime
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.tasker.chronos.data.models.Task
+import com.tasker.chronos.data.repository.TasksRepository
+import com.tasker.chronos.notifications.TaskReminderScheduler
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.LocalDateTime
 
-    class TasksViewModel(application: Application) : AndroidViewModel(application) {
-        private val repository = TasksRepository(application)
+class TasksViewModel(application: Application) : AndroidViewModel(application) {
+    private val repository = TasksRepository(application)
 
-        // Wszystkie aktywne zadania
-        val allTasks: StateFlow<List<Task>> = repository.getAllTasks()
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = emptyList()
-            )
+    private val _allTasks = MutableStateFlow<List<Task>>(emptyList())
+    private val _archivedTasks = MutableStateFlow<List<Task>>(emptyList())
 
-        // Zadania z Inbox (bez daty)
-        val inboxTasks: StateFlow<List<Task>> = repository.getInboxTasks()
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = emptyList()
-            )
+    val allTasks: StateFlow<List<Task>> = _allTasks
+    val archivedTasks: StateFlow<List<Task>> = _archivedTasks
 
-        // Zaplanowane zadania (z datą)
-        val scheduledTasks: StateFlow<List<Task>> = repository.getScheduledTasks()
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = emptyList()
-            )
+    val inboxTasks: StateFlow<List<Task>> = _allTasks
+        .map { tasks -> tasks.filter { it.date == null } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-        // Archiwalne zadania
-        val archivedTasks: StateFlow<List<Task>> = repository.getArchivedTasks()
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = emptyList()
-            )
-
-        fun addTask(task: Task) {
-            viewModelScope.launch(Dispatchers.IO) {
-                repository.addTask(task)
-
-                if (task.hasReminder && task.date != null) {
-                    TaskReminderScheduler.schedule(getApplication(), task)
-                }
-            }
-        }
-
-        fun updateTask(task: Task) {
-            viewModelScope.launch(Dispatchers.IO) {
-                repository.updateTask(task)
-
-                if (task.hasReminder && task.date != null && !task.isCompleted) {
-                    TaskReminderScheduler.reschedule(getApplication(), task)
-                } else {
-                    TaskReminderScheduler.cancel(getApplication(), task)
-                }
-
-                android.util.Log.d("TasksViewModel", "✅ Zaktualizowano zadanie: ${task.title}")
-            }
-        }
-
-        /**
-         * ✅ NAPRAWIONE: Używa .first() zamiast .value
-         */
-        fun toggleTaskCompleted(taskId: String) {
-            viewModelScope.launch(Dispatchers.IO) {
-                android.util.Log.d("TasksViewModel", "🔍 Toggle dla ID: $taskId")
-
-                // ✅ POPRAWKA: Pobierz świeże dane z Repository
-                val allTasksList = repository.getAllTasks().first()
-                val archivedTasksList = repository.getArchivedTasks().first()
-
-                android.util.Log.d("TasksViewModel", "🔍 Aktywnych: ${allTasksList.size}, Archiwalnych: ${archivedTasksList.size}")
-
-                val task = allTasksList.find { it.id == taskId }
-                    ?: archivedTasksList.find { it.id == taskId }
-
-                if (task == null) {
-                    android.util.Log.e("TasksViewModel", "❌ Nie znaleziono zadania: $taskId")
-                    android.util.Log.e("TasksViewModel", "❌ Dostępne ID w aktywnych: ${allTasksList.map { it.id }}")
-                    android.util.Log.e("TasksViewModel", "❌ Dostępne ID w archiwum: ${archivedTasksList.map { it.id }}")
-                    return@launch
-                }
-
-                android.util.Log.d("TasksViewModel", "✅ Znaleziono: ${task.title}, obecny stan: ${task.isCompleted}")
-
-                val newCompletedStatus = !task.isCompleted
-                val updatedTask = task.copy(
-                    isCompleted = newCompletedStatus,
-                    completedAt = if (newCompletedStatus) LocalDateTime.now().toString() else null
+    val scheduledTasks: StateFlow<List<Task>> = _allTasks
+        .map { tasks ->
+            tasks.filter { it.date != null }
+                .sortedWith(
+                    compareBy<Task> { it.date }
+                        .thenByDescending { it.priority }
+                        .thenBy { it.time ?: "23:59" }
                 )
-
-                repository.updateTask(updatedTask)
-
-                if (updatedTask.isCompleted) {
-                    TaskReminderScheduler.cancel(getApplication(), updatedTask)
-                    android.util.Log.d("TasksViewModel", "✅ Ukończono: ${task.title}")
-                } else {
-                    if (updatedTask.hasReminder && updatedTask.date != null) {
-                        TaskReminderScheduler.schedule(getApplication(), updatedTask)
-                    }
-                    android.util.Log.d("TasksViewModel", "↩️ Przywrócono: ${task.title}")
-                }
-            }
         }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-        fun deleteTask(task: Task) {
-            viewModelScope.launch(Dispatchers.IO) {
-                repository.deleteTask(task.id)
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            val storedActive = repository.getAllTasksAsList()
+            val active = storedActive.filter { !it.isCompleted }
+            val stragglers = storedActive.filter { it.isCompleted }
+            val archived = repository.getArchivedTasksAsList() + stragglers
+            _allTasks.value = active
+            _archivedTasks.value = archived.distinctBy { it.id }
+            if (stragglers.isNotEmpty()) {
+                repository.replaceActiveAndArchived(_allTasks.value, _archivedTasks.value)
+            }
+            android.util.Log.d(
+                "TasksViewModel",
+                "Loaded active=${active.size} archived=${_archivedTasks.value.size}"
+            )
+        }
+    }
+
+    fun findTask(id: String): Task? =
+        _allTasks.value.find { it.id == id } ?: _archivedTasks.value.find { it.id == id }
+
+    /** Updates in-memory list immediately (UI), then persists on IO. */
+    fun updateTask(task: Task) {
+        applyUpdateInMemory(task)
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.replaceActiveAndArchived(_allTasks.value, _archivedTasks.value)
+            if (task.isCompleted || !task.hasReminder || task.date == null) {
                 TaskReminderScheduler.cancel(getApplication(), task)
-                android.util.Log.d("TasksViewModel", "🗑️ Usunięto zadanie: ${task.title}")
+            } else {
+                TaskReminderScheduler.reschedule(getApplication(), task)
             }
+            val verify = findTask(task.id)
+            android.util.Log.d(
+                "TasksViewModel",
+                "Saved '${task.title}' verify='${verify?.title}' ok=${verify?.title == task.title}"
+            )
         }
+    }
 
-        fun clearArchive() {
-            viewModelScope.launch(Dispatchers.IO) {
-                repository.clearArchive()
-                android.util.Log.d("TasksViewModel", "🗑️ Wyczyszczono archiwum")
-            }
-        }
-
-        fun assignDateToTask(taskId: String, date: String?, time: String? = null) {
-            viewModelScope.launch(Dispatchers.IO) {
-                // ✅ POPRAWKA: Użyj .first()
-                val allTasksList = repository.getAllTasks().first()
-                val task = allTasksList.find { it.id == taskId }
-
-                if (task == null) {
-                    android.util.Log.e("TasksViewModel", "❌ Nie znaleziono zadania: $taskId")
-                    return@launch
-                }
-
-                val updatedTask = task.copy(
-                    date = date,
-                    time = time
-                )
-
-                repository.updateTask(updatedTask)
-
-                if (updatedTask.hasReminder) {
-                    TaskReminderScheduler.reschedule(getApplication(), updatedTask)
-                }
-
-                android.util.Log.d("TasksViewModel", "📅 Przypisano datę do zadania: ${task.title}")
+    private fun applyUpdateInMemory(task: Task) {
+        if (task.isCompleted) {
+            _allTasks.value = _allTasks.value.filter { it.id != task.id }
+            _archivedTasks.value =
+                listOf(task) + _archivedTasks.value.filter { it.id != task.id }
+        } else {
+            _archivedTasks.value = _archivedTasks.value.filter { it.id != task.id }
+            val exists = _allTasks.value.any { it.id == task.id }
+            _allTasks.value = if (exists) {
+                _allTasks.value.map { if (it.id == task.id) task else it }
+            } else {
+                _allTasks.value + task
             }
         }
     }
+
+    fun addTask(task: Task) {
+        _allTasks.value = _allTasks.value.filter { it.id != task.id } + task
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.replaceActiveAndArchived(_allTasks.value, _archivedTasks.value)
+            if (task.hasReminder && task.date != null) {
+                TaskReminderScheduler.schedule(getApplication(), task)
+            }
+        }
+    }
+
+    fun toggleTaskCompleted(taskId: String) {
+        val task = findTask(taskId) ?: return
+        updateTask(
+            task.copy(
+                isCompleted = !task.isCompleted,
+                completedAt = if (!task.isCompleted) LocalDateTime.now().toString() else null
+            )
+        )
+    }
+
+    fun deleteTask(task: Task) {
+        _allTasks.value = _allTasks.value.filter { it.id != task.id }
+        _archivedTasks.value = _archivedTasks.value.filter { it.id != task.id }
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.replaceActiveAndArchived(_allTasks.value, _archivedTasks.value)
+            TaskReminderScheduler.cancel(getApplication(), task)
+        }
+    }
+
+    fun clearArchive() {
+        _archivedTasks.value = emptyList()
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.replaceActiveAndArchived(_allTasks.value, _archivedTasks.value)
+        }
+    }
+
+    fun assignDateToTask(taskId: String, date: String?, time: String? = null) {
+        val task = _allTasks.value.find { it.id == taskId } ?: return
+        updateTask(task.copy(date = date, time = time))
+    }
+}

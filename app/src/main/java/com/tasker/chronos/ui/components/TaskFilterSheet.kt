@@ -407,7 +407,7 @@ private fun DatePickerDialog(
 ) {
     val datePickerState = rememberDatePickerState(
         initialSelectedDateMillis = currentDate?.let {
-            LocalDate.parse(it).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            com.tasker.chronos.utils.DateMillis.parseToUtcMillisOrNow(it)
         }
     )
 
@@ -417,12 +417,11 @@ private fun DatePickerDialog(
             TextButton(
                 onClick = {
                     datePickerState.selectedDateMillis?.let { millis ->
-                        val date = java.time.Instant.ofEpochMilli(millis)
-                            .atZone(java.time.ZoneId.systemDefault())
-                            .toLocalDate()
-                            .toString()
-                        onDateSelected(date)
+                        onDateSelected(
+                            com.tasker.chronos.utils.DateMillis.utcMillisToLocalDate(millis).toString()
+                        )
                     }
+                    onDismiss()
                 }
             ) {
                 Text("OK")

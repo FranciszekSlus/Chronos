@@ -172,18 +172,9 @@
         var selectedTask by remember { mutableStateOf<Task?>(null) }
         var showEditTaskSheet by remember { mutableStateOf(false) }
         var selectedEvent by remember { mutableStateOf<CustomEvent?>(null) }
-        LaunchedEffect(deepLinkNonce, deepLinkOpenEventId, allCustomEvents, selectedDate) {
+        // Powiadomienie o wydarzeniu: tylko widok dnia/kalendarza, bez auto-edycji
+        LaunchedEffect(deepLinkNonce, deepLinkOpenEventId) {
             if (deepLinkNonce == null) return@LaunchedEffect
-            if (deepLinkOpenEventId.isNullOrBlank()) {
-                onDeepLinkOpenConsumed()
-                return@LaunchedEffect
-            }
-            if (allCustomEvents.isEmpty()) return@LaunchedEffect
-            val evt = allCustomEvents.find { it.id == deepLinkOpenEventId }
-            if (evt != null && evt.occursOnDate(selectedDate.toString())) {
-                selectedEvent = evt
-                showEditDialog = true
-            }
             onDeepLinkOpenConsumed()
         }
         val scrollState = rememberScrollState()

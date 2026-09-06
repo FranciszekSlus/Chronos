@@ -510,14 +510,7 @@ fun DatePickerDialog(
     onDismiss: () -> Unit
 ) {
     val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = try {
-            LocalDate.parse(selectedDate)
-                .atStartOfDay(java.time.ZoneId.systemDefault())
-                .toInstant()
-                .toEpochMilli()
-        } catch (e: Exception) {
-            System.currentTimeMillis()
-        }
+        initialSelectedDateMillis = com.tasker.chronos.utils.DateMillis.parseToUtcMillisOrNow(selectedDate)
     )
 
     DatePickerDialog(
@@ -526,11 +519,11 @@ fun DatePickerDialog(
             TextButton(
                 onClick = {
                     datePickerState.selectedDateMillis?.let { millis ->
-                        val date = java.time.Instant.ofEpochMilli(millis)
-                            .atZone(java.time.ZoneId.systemDefault())
-                            .toLocalDate()
-                        onDateSelected(date.toString())
+                        onDateSelected(
+                            com.tasker.chronos.utils.DateMillis.utcMillisToLocalDate(millis).toString()
+                        )
                     }
+                    onDismiss()
                 }
             ) {
                 Text("OK")

@@ -16,7 +16,8 @@ data class Note(
     @Serializable(with = LocalDateTimeSerializer::class)
     val updatedAt: LocalDateTime = LocalDateTime.now(),
     val isPinned: Boolean = false,
-    val checkboxItems: Map<String, Boolean> = emptyMap() // ✅ ID checkboxa -> czy zaznaczony
+    val isLocked: Boolean = false,
+    val checkboxItems: Map<String, Boolean> = emptyMap()
 )
 
 @Serializable

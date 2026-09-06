@@ -1,21 +1,67 @@
 // Plik: ui/components/EditTaskSheet.kt
 package com.tasker.chronos.ui.components
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Title
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,12 +70,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.tasker.chronos.data.models.ReminderType
 import com.tasker.chronos.data.models.Task
 import com.tasker.chronos.data.models.TaskPriority
-import com.tasker.chronos.data.models.ReminderType
 import com.tasker.chronos.data.models.toColor
 import com.tasker.chronos.data.models.toDisplayName
-import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -41,49 +88,93 @@ fun EditTaskSheet(
     onSave: (Task) -> Unit,
     onDelete: (Task) -> Unit
 ) {
-    var title by remember { mutableStateOf(task.title) }
-    var description by remember { mutableStateOf(task.description) }
-    var selectedDate by remember { mutableStateOf(task.date) }
-    var selectedTime by remember { mutableStateOf(task.time) }
-    var selectedPriority by remember { mutableStateOf(task.priority) }
-    var hasReminder by remember { mutableStateOf(task.hasReminder) }
+    var title by remember(task.id) { mutableStateOf(task.title) }
+    var description by remember(task.id) { mutableStateOf(task.description) }
+    var selectedDate by remember(task.id) { mutableStateOf(task.date) }
+    var selectedTime by remember(task.id) { mutableStateOf(task.time) }
+    var selectedPriority by remember(task.id) { mutableStateOf(task.priority) }
+    var hasReminder by remember(task.id) { mutableStateOf(task.hasReminder) }
 
-    var reminderType by remember { mutableStateOf(task.reminderType) }
-    var reminderMinutesBefore by remember { mutableStateOf(task.reminderMinutesBefore) }
-    var reminderCustomTime by remember { mutableStateOf(task.reminderCustomTime ?: "09:00") }
-    var reminderCustomDays by remember { mutableStateOf(task.reminderCustomDays ?: 1) }
+    var reminderType by remember(task.id) { mutableStateOf(task.reminderType) }
+    var reminderMinutesBefore by remember(task.id) { mutableStateOf(task.reminderMinutesBefore) }
+    var reminderCustomTime by remember(task.id) { mutableStateOf(task.reminderCustomTime ?: "09:00") }
+    var reminderCustomDays by remember(task.id) { mutableStateOf(task.reminderCustomDays ?: 1) }
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var showReminderTimePicker by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(50)
-        visible = true
+    fun commitSave() {
+        if (title.isBlank()) return
+        val updated = task.copy(
+            title = title.trim(),
+            description = description,
+            date = selectedDate,
+            time = selectedTime,
+            priority = selectedPriority,
+            hasReminder = hasReminder && selectedDate != null,
+            reminderType = reminderType,
+            reminderMinutesBefore = reminderMinutesBefore,
+            reminderCustomTime = reminderCustomTime,
+            reminderCustomDays = reminderCustomDays
+        )
+        android.util.Log.d("EditTaskSheet", "Zapisz id=${updated.id} title=${updated.title}")
+        onSave(updated)
     }
 
-    ModalBottomSheet(
+    Dialog(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = true,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false
+        )
     ) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(animationSpec = tween(300)) + slideInVertically(
-                animationSpec = tween(400, easing = EaseOutCubic)
-            ),
-            exit = fadeOut() + slideOutVertically()
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding(),
+            color = MaterialTheme.colorScheme.surface
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 32.dp)
-                    .verticalScroll(rememberScrollState())
+                    .fillMaxSize()
+                    .imePadding()
             ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Zamknij")
+                    }
+                    Text(
+                        "Edytuj zadanie",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    TextButton(
+                        onClick = { commitSave() },
+                        enabled = title.isNotBlank()
+                    ) {
+                        Text("Zapisz", fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp)
+                        .padding(bottom = 24.dp)
+                ) {
                 // Header
                 Box(
                     modifier = Modifier
@@ -297,8 +388,24 @@ fun EditTaskSheet(
 
                             Switch(
                                 checked = hasReminder,
-                                onCheckedChange = { hasReminder = it }
+                                onCheckedChange = { enabled ->
+                                    if (enabled && selectedDate == null) {
+                                        showDatePicker = true
+                                    }
+                                    hasReminder = enabled
+                                }
                             )
+                        }
+
+                        if (hasReminder && selectedDate == null) {
+                            Text(
+                                "Wybierz datę zadania, żeby zaplanować powiadomienie.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            TextButton(onClick = { showDatePicker = true }) {
+                                Text("Wybierz datę")
+                            }
                         }
 
                         AnimatedVisibility(
@@ -454,7 +561,6 @@ fun EditTaskSheet(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // Przyciski
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -468,30 +574,14 @@ fun EditTaskSheet(
                     }
 
                     Button(
-                        onClick = {
-                            if (title.isNotBlank()) {
-                                onSave(
-                                    task.copy(
-                                        title = title,
-                                        description = description,
-                                        date = selectedDate,
-                                        time = selectedTime,
-                                        priority = selectedPriority,
-                                        hasReminder = hasReminder && selectedDate != null,
-                                        reminderType = reminderType,
-                                        reminderMinutesBefore = reminderMinutesBefore,
-                                        reminderCustomTime = reminderCustomTime,
-                                        reminderCustomDays = reminderCustomDays
-                                    )
-                                )
-                            }
-                        },
+                        onClick = { commitSave() },
                         modifier = Modifier.weight(1f).height(56.dp),
                         enabled = title.isNotBlank(),
                         shape = RoundedCornerShape(16.dp)
                     ) {
                         Text("Zapisz", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
+                }
                 }
             }
         }
@@ -500,13 +590,7 @@ fun EditTaskSheet(
     // DatePicker
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = selectedDate?.let {
-                try {
-                    LocalDate.parse(it).toEpochDay() * 24 * 60 * 60 * 1000
-                } catch (e: Exception) {
-                    System.currentTimeMillis()
-                }
-            } ?: System.currentTimeMillis()
+            initialSelectedDateMillis = com.tasker.chronos.utils.DateMillis.parseToUtcMillisOrNow(selectedDate)
         )
 
         DatePickerDialog(
@@ -515,7 +599,9 @@ fun EditTaskSheet(
                 TextButton(
                     onClick = {
                         datePickerState.selectedDateMillis?.let { millis ->
-                            selectedDate = LocalDate.ofEpochDay(millis / (24 * 60 * 60 * 1000)).toString()
+                            selectedDate = com.tasker.chronos.utils.DateMillis
+                                .utcMillisToLocalDate(millis)
+                                .toString()
                         }
                         showDatePicker = false
                     }

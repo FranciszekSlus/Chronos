@@ -1,6 +1,9 @@
 // Plik: ui/screens/SettingsScreen.kt
 package com.tasker.chronos.ui.screens
 
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -14,13 +17,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tasker.chronos.data.models.Achievements
 import com.tasker.chronos.ui.components.GlassSurface
-import com.tasker.chronos.viewmodels.UserProfileViewModel
+import com.tasker.chronos.utils.DataBackupManager
 import com.tasker.chronos.viewmodels.SettingsViewModel
+import com.tasker.chronos.viewmodels.UserProfileViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,11 +37,31 @@ fun SettingsScreen(
     onNavigateToStatistics: () -> Unit = {},
     onNavigateToAchievements: () -> Unit = {},
 ) {
+    val context = LocalContext.current
     val userProfile by userProfileViewModel.userProfile.collectAsState()
     val settings by settingsViewModel.settings.collectAsState()
+    val isBusy by settingsViewModel.isBusy.collectAsState()
 
     var showResetDialog by remember { mutableStateOf(false) }
-    var showExportDialog by remember { mutableStateOf(false) }
+    var showImportConfirm by remember { mutableStateOf(false) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        if (uri != null) settingsViewModel.exportBackup(uri)
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) settingsViewModel.importBackup(uri)
+    }
+
+    LaunchedEffect(Unit) {
+        settingsViewModel.backupMessage.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -56,7 +81,6 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            // Sekcja: Profil
             SectionHeader("Profil")
 
             GlassSurface(modifier = Modifier.padding(horizontal = 16.dp)) {
@@ -68,7 +92,6 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Sekcja: Powiadomienia
             SectionHeader("Powiadomienia")
 
             GlassSurface(modifier = Modifier.padding(horizontal = 16.dp)) {
@@ -86,26 +109,44 @@ fun SettingsScreen(
             }
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Sekcja: Archiwum
             SectionHeader("Dane")
 
             GlassSurface(modifier = Modifier.padding(horizontal = 16.dp)) {
-                SettingsItem(
-                    icon = Icons.Default.Archive,
-                    title = "Archiwum",
-                    subtitle = "Przeglądaj ukończone elementy",
-                    onClick = onNavigateToArchive
-                )
+                Column {
+                    SettingsItem(
+                        icon = Icons.Default.Archive,
+                        title = "Archiwum",
+                        subtitle = "Przeglądaj ukończone elementy",
+                        onClick = onNavigateToArchive
+                    )
+                    SettingsItem(
+                        icon = Icons.Default.Upload,
+                        title = "Eksport danych (ZIP)",
+                        subtitle = if (isBusy) "Trwa eksport…" else "Zapisz kopię zapasową",
+                        onClick = {
+                            if (!isBusy) {
+                                exportLauncher.launch(DataBackupManager.suggestedFileName())
+                            }
+                        }
+                    )
+                    SettingsItem(
+                        icon = Icons.Default.Download,
+                        title = "Import danych (ZIP)",
+                        subtitle = if (isBusy) "Trwa import…" else "Przywróć z kopii zapasowej",
+                        onClick = {
+                            if (!isBusy) showImportConfirm = true
+                        }
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-// Sekcja: Statystyki
             SectionHeader("Statystyki")
 
             GlassSurface(modifier = Modifier.padding(horizontal = 16.dp)) {
                 SettingsItem(
-                    icon = Icons.Default.BarChart, // ✅ DODAJ
+                    icon = Icons.Default.BarChart,
                     title = "Statystyki",
                     subtitle = "Zobacz swoją aktywność",
                     onClick = onNavigateToStatistics
@@ -123,10 +164,8 @@ fun SettingsScreen(
                 )
             }
 
-
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Sekcja: Pomoc
             SectionHeader("Pomoc")
 
             GlassSurface(modifier = Modifier.padding(horizontal = 16.dp)) {
@@ -150,7 +189,6 @@ fun SettingsScreen(
         }
     }
 
-    // Dialog resetowania punktów
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
@@ -174,15 +212,29 @@ fun SettingsScreen(
         )
     }
 
-    // Dialog eksportu danych
-    if (showExportDialog) {
+    if (showImportConfirm) {
         AlertDialog(
-            onDismissRequest = { showExportDialog = false },
-            title = { Text("Eksport danych") },
-            text = { Text("Funkcja eksportu danych zostanie wkrótce dodana.") },
+            onDismissRequest = { showImportConfirm = false },
+            title = { Text("Import danych") },
+            text = {
+                Text(
+                    "Import zastąpi obecne dane (zadania, nawyki, cele, notatki, zakupy itd.) " +
+                        "plikami z archiwum ZIP. Po imporcie aplikacja uruchomi się ponownie."
+                )
+            },
             confirmButton = {
-                TextButton(onClick = { showExportDialog = false }) {
-                    Text("OK")
+                TextButton(
+                    onClick = {
+                        showImportConfirm = false
+                        importLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "*/*"))
+                    }
+                ) {
+                    Text("Wybierz ZIP")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showImportConfirm = false }) {
+                    Text("Anuluj")
                 }
             }
         )
@@ -206,8 +258,7 @@ fun ProfileCard(
     onResetPoints: () -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer
@@ -313,7 +364,7 @@ fun SettingsItem(
         }
     }
 
-    Divider(
+    HorizontalDivider(
         modifier = Modifier.padding(start = 56.dp),
         color = MaterialTheme.colorScheme.outlineVariant
     )
